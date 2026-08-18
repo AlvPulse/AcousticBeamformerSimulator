@@ -41,22 +41,29 @@ def iso9613_absorption_db_per_m(freq_hz, temp_c=20.0, rel_humidity=50.0, pressur
     alpha = 8.686 * f**2 * ( 1.84e-11 * (pr/pa) * (T/Tr)**0.5 + (T/Tr)**-2.5 * (term1 + term2) )
     return float(alpha)
 
-def path_loss_db(freq_hz, distance_m, temp_c=20.0, rel_humidity=50.0, pressure_kpa=101.325) -> float:
+def path_loss_db(freq_hz, distance_m, temp_c=20.0, rel_humidity=50.0, pressure_kpa=101.325,
+                 ground_effect_loss_db=0.0, shadowing_std_db=0.0) -> float:
     """
-    Computes total path loss in dB = geometric spreading + atmospheric absorption.
-    PL(f, r) = 20*log10(r / r0) + alpha(f) * r  [dB, r0 = 1m]
+    Computes total path loss in dB = geometric spreading + atmospheric absorption
+    + ground effect + log-normal shadowing.
+    PL(f, r) = 20*log10(r / r0) + alpha(f)*r + A_ground + X_sigma
     """
     if distance_m <= 0:
         return 0.0 # No path loss at 0m, or define arbitrarily
 
     r0 = 1.0
-    spreading_loss = 20.0 * np.log10(distance_m / r0) if distance_m >= r0 else 0.0 # If near field < 1m, you can have gain relative to 1m, or just standard 20log10(r). Standard is 20log10(r).
     spreading_loss = 20.0 * np.log10(distance_m / r0)
 
     alpha = iso9613_absorption_db_per_m(freq_hz, temp_c, rel_humidity, pressure_kpa)
     abs_loss = alpha * distance_m
 
-    return spreading_loss + abs_loss
+    # Shadowing (log-normal random variable added in dB domain)
+    shadowing_loss = 0.0
+    if shadowing_std_db > 0.0:
+        shadowing_loss = np.random.normal(0, shadowing_std_db)
+
+    total_loss = spreading_loss + abs_loss + ground_effect_loss_db + shadowing_loss
+    return total_loss
 
 def cartesian_to_spherical(x, y, z):
     """Returns r, az, el (az, el in radians)"""

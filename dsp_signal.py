@@ -104,7 +104,9 @@ def synthesize_array_recording(array, source_signal, az, el, r,
         r_i = np.linalg.norm(p_s - p_i)
 
         pl_db = path_loss_db(freq_hz_for_pl, r_i, env_params['temp_c'],
-                             env_params['rel_humidity'], env_params['pressure_kpa'])
+                             env_params['rel_humidity'], env_params['pressure_kpa'],
+                             env_params.get('ground_effect_loss_db', 0.0),
+                             env_params.get('shadowing_std_db', 0.0))
 
         # Apply path loss scale
         scale = 10.0 ** (-pl_db / 20.0)
@@ -133,8 +135,11 @@ def synthesize_array_recording(array, source_signal, az, el, r,
             p_n_s = spherical_to_cartesian(n_r, n_az, n_el)
             n_r_i = np.linalg.norm(p_n_s - p_i)
 
+            # Note: Assuming ambient directional noise is also subject to ground and shadowing
             n_pl_db = path_loss_db(freq_hz_for_pl, n_r_i, env_params['temp_c'],
-                                 env_params['rel_humidity'], env_params['pressure_kpa'])
+                                 env_params['rel_humidity'], env_params['pressure_kpa'],
+                                 env_params.get('ground_effect_loss_db', 0.0),
+                                 env_params.get('shadowing_std_db', 0.0))
             n_scale = 10.0 ** (-n_pl_db / 20.0)
 
             n_sig_delayed = apply_fractional_delay(noise_sig, n_delays[i], fs)

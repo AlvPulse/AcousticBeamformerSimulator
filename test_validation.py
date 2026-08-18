@@ -117,6 +117,48 @@ def test_spl_conversion():
     p_rms_expected = 20e-6 * (10**(94.0/20.0))
     assert np.isclose(p_amp, p_rms_expected), "SPL to Pa conversion is incorrect."
 
+def test_advanced_path_loss_statistics():
+    """
+    Test that the path loss model correctly incorporates deterministic ground effect
+    and log-normal shadowing variation. Tests over hundreds of trials to verify
+    the statistical distribution matches the expected std deviation and mean.
+    """
+    freq_hz = 1000.0
+    distance_m = 100.0
+    ground_effect_loss = 3.0 # dB
+    shadowing_std = 2.0 # dB
+
+    # Baseline expected mean loss (geometric + absorption + ground)
+    baseline_loss = path_loss_db(freq_hz, distance_m,
+                                 ground_effect_loss_db=ground_effect_loss,
+                                 shadowing_std_db=0.0)
+
+    # Run 10000 trials to get good statistics
+    n_trials = 10000
+    losses = np.array([path_loss_db(freq_hz, distance_m,
+                                    ground_effect_loss_db=ground_effect_loss,
+                                    shadowing_std_db=shadowing_std)
+                       for _ in range(n_trials)])
+
+    sample_mean = np.mean(losses)
+    sample_std = np.std(losses)
+
+    # The mean should match the baseline (which includes ground effect)
+    assert np.isclose(sample_mean, baseline_loss, atol=0.1), f"Expected mean {baseline_loss}, got {sample_mean}"
+
+    # The standard deviation should match the shadowing parameter
+    assert np.isclose(sample_std, shadowing_std, atol=0.1), f"Expected std dev {shadowing_std}, got {sample_std}"
+
+    # Check 95% confidence interval (approx +/- 1.96 * sigma)
+    # About 95% of data should fall within mean +/- 1.96 * sigma
+    lower_bound = baseline_loss - 1.96 * shadowing_std
+    upper_bound = baseline_loss + 1.96 * shadowing_std
+
+    in_interval = np.sum((losses >= lower_bound) & (losses <= upper_bound))
+    pct_in_interval = in_interval / n_trials
+
+    assert 0.93 < pct_in_interval < 0.97, f"Expected ~95% in CI, got {pct_in_interval*100:.1f}%"
+
 def test_delay_and_sum_steering():
     """
     Test the empirical Delay-and-Sum beamformer points to the true source
