@@ -20,31 +20,30 @@ class ArrayGeometry:
         If window_type == "blackman", computes radial distance from centroid
         and applies a Blackman window.
         """
-        if window_type == "none" or window_type is False or window_type is None:
+        window_type = str(window_type).lower()
+        if window_type == "none" or window_type == "false":
             return np.ones(self.n_sensors)
 
-        if window_type == "blackman" or window_type is True:
-            # Radial distance from centroid
-            radii = np.sqrt(self.x**2 + self.y**2)
-            max_r = np.max(radii)
-            if max_r == 0:
-                return np.ones(self.n_sensors)
+        radii = np.sqrt(self.x**2 + self.y**2)
+        max_r = np.max(radii)
+        if max_r == 0:
+            return np.ones(self.n_sensors)
 
-            # Normalize radii to [-0.5, 0.5] to fit a typical window function width
-            # Standard blackman window: w(n) = 0.42 - 0.5*cos(2*pi*n/N) + 0.08*cos(4*pi*n/N)
-            # For a radial window, we want the peak (1.0) at radius 0, and tapering to 0 at max_r.
-            # So we map r=0 to the center of the Blackman window, and r=max_r to the edge.
+        # Map r to an equivalent angle theta from 0 to pi
+        # At r=0, theta = 0; at r=max_r, theta = pi
+        theta = np.pi * (radii / max_r)
 
-            # Map r to an equivalent angle theta from 0 to pi
-            # At r=0, theta = 0; at r=max_r, theta = pi
-            theta = np.pi * (radii / max_r)
-
-            # A 1D blackman window mapped to half-space (center to edge)
-            # Center of standard blackman is at n=N/2, which corresponds to the peak.
-            # We use the formula shifted such that peak is at 0.
+        if window_type == "blackman" or window_type == "true":
             # w(theta) = 0.42 + 0.5*cos(theta) + 0.08*cos(2*theta)
-            weights = 0.42 + 0.5 * np.cos(theta) + 0.08 * np.cos(2 * theta)
-            return weights
+            return 0.42 + 0.5 * np.cos(theta) + 0.08 * np.cos(2 * theta)
+
+        elif window_type == "hanning":
+            # standard Hanning mapped to center (0.5 + 0.5*cos(theta))
+            return 0.5 + 0.5 * np.cos(theta)
+
+        elif window_type == "hamming":
+            # standard Hamming mapped to center (0.54 + 0.46*cos(theta))
+            return 0.54 + 0.46 * np.cos(theta)
 
         raise ValueError(f"Unknown window type: {window_type}")
 

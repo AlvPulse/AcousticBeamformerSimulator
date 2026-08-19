@@ -60,6 +60,9 @@ with col1:
         st.session_state.sensor_text = PRESETS[preset]
 
     sensor_text = st.text_area("Sensors (x, y in meters)", st.session_state.sensor_text, height=150)
+
+    spatial_window = st.selectbox("Spatial Tapering (Window)", ["None", "Blackman", "Hanning", "Hamming"])
+
     ideal_mode = st.checkbox("Ideal array factor only (no noise, no path loss)", value=True)
 
 with col2:
@@ -93,9 +96,11 @@ EL_STEP = 2.0
 grid_az = np.arange(-180, 180 + AZ_STEP, AZ_STEP)
 grid_el = np.arange(0, 90 + EL_STEP, EL_STEP)
 
+spatial_weights = arr.get_spatial_weights(spatial_window.lower())
+
 if ideal_mode:
     # Run Stage 0
-    power_map = array_factor(arr, freq, az, el, grid_az, grid_el, c=c)
+    power_map = array_factor(arr, freq, az, el, grid_az, grid_el, c=c, spatial_weights=spatial_weights)
     # Convert to dB manually since array_factor returns linear power normalized
     power_db = 10 * np.log10(power_map + 1e-15)
 else:
@@ -104,7 +109,7 @@ else:
            'ground_effect_loss_db': ground, 'shadowing_std_db': shadowing}
     sig = tone_burst(freq, 0.05, fs)
     recording = synthesize_array_recording(arr, sig, az, el, dist, level, fs, noise, freq, env)
-    power_map = delay_and_sum(recording, arr, fs, grid_az, grid_el, c=c)
+    power_map = delay_and_sum(recording, arr, fs, grid_az, grid_el, c=c, spatial_weights=spatial_weights)
     power_db = 10 * np.log10(power_map + 1e-15)
 
 # Normalize power to 0 dB max
