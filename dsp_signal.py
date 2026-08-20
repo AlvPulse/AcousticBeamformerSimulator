@@ -36,6 +36,40 @@ def load_wav(filepath, fs_target=None) -> np.ndarray:
 def spl_db_to_pa(spl_db, p_ref=20e-6) -> float:
     return p_ref * (10.0 ** (spl_db / 20.0))
 
+def compute_spatial_coherence(recording, fs, nperseg=256):
+    """
+    Computes the average magnitude squared coherence between all unique pairs of sensors.
+    This gives a scalar [0, 1] indicating how correlated the wavefield is across the array.
+    """
+    n_sensors = recording.shape[0]
+    if n_sensors < 2:
+        return 1.0
+
+    total_coh = 0.0
+    count = 0
+    # To keep it fast, we can compute coherence for adjacent pairs,
+    # but for small arrays (e.g. 16), all pairs is fast enough (120 pairs).
+    for i in range(n_sensors):
+        for j in range(i + 1, n_sensors):
+            # compute MSC
+            f, Cxy = scipy_signal.coherence(recording[i], recording[j], fs, nperseg=min(nperseg, recording.shape[1]))
+            # average MSC across all frequency bins for this pair
+            total_coh += np.mean(Cxy)
+            count += 1
+
+    return total_coh / max(1, count)
+
+def compute_array_gain(recording, beamformed_time_signal, pure_signal_power, pure_noise_power=None):
+    """
+    Computes the empirical Array Gain (AG) = SNR_out / SNR_in.
+    Note: Requires knowing the pure signal/noise powers, or estimating them.
+    Because we synthesize the signal, we can calculate theoretical input SNR.
+    Since this needs to work on the output of DAS (which we currently do in freq domain to just get power),
+    we might need to calculate input SNR and output peak power.
+    We will implement a simpler empirical version in the main app using known inputs.
+    """
+    pass
+
 def apply_fractional_delay(sig, delay_s, fs):
     """
     Applies a fractional delay to a signal using frequency domain phase shift.

@@ -133,3 +133,41 @@ def delay_and_sum(recording, array, fs, grid_az, grid_el, c=343.0, spatial_weigh
     power_map /= np.max(power_map)
 
     return power_map
+
+def compute_map_papr(power_map_linear):
+    """
+    Computes Peak-to-Average Power Ratio (PAPR) of the 2D power map in dB.
+    High PAPR = Sharp distinct peak. Low PAPR = Noise / Ambiguity everywhere.
+    """
+    peak = np.max(power_map_linear)
+    avg = np.mean(power_map_linear)
+    if avg <= 0:
+        return 0.0
+    return 10 * np.log10(peak / avg)
+
+def compute_isl(power_map_linear, grid_az, grid_el, true_az, true_el, mainlobe_radius_deg=15.0):
+    """
+    Computes Integrated Sidelobe Level (ISL) in dB.
+    Ratio of total energy outside the mainlobe to energy inside the mainlobe.
+    """
+    AZ, EL = np.meshgrid(grid_az, grid_el)
+
+    # Distance from true DOA
+    # Approximate angular distance for a flat map (valid for narrow mainlobes)
+    d_az = AZ - true_az
+    # wrap az distance to [-180, 180]
+    d_az = (d_az + 180) % 360 - 180
+    d_el = EL - true_el
+
+    dist_sq = d_az**2 + d_el**2
+    radius_sq = mainlobe_radius_deg**2
+
+    mainlobe_mask = dist_sq <= radius_sq
+
+    main_energy = np.sum(power_map_linear[mainlobe_mask])
+    sidelobe_energy = np.sum(power_map_linear[~mainlobe_mask])
+
+    if main_energy <= 0 or sidelobe_energy <= 0:
+        return -np.inf # No sidelobes or no mainlobe
+
+    return 10 * np.log10(sidelobe_energy / main_energy)

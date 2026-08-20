@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import io
 
 from dsp_array import ArrayGeometry
-from dsp_signal import tone_burst, synthesize_array_recording
-from beamformer import array_factor, delay_and_sum
+from dsp_signal import tone_burst, synthesize_array_recording, compute_spatial_coherence
+from beamformer import array_factor, delay_and_sum, compute_map_papr, compute_isl
 
 st.set_page_config(page_title="Acoustic Array Diagnostics", layout="wide")
 
@@ -112,6 +112,31 @@ else:
     power_map = delay_and_sum(recording, arr, fs, grid_az, grid_el, c=c, spatial_weights=spatial_weights)
     power_db = 10 * np.log10(power_map + 1e-15)
 
+# Compute sanity check features
+papr = compute_map_papr(power_map)
+isl = compute_isl(power_map, grid_az, grid_el, az, el)
+spatial_coh = 1.0 if ideal_mode else compute_spatial_coherence(recording, fs)
+
+# Theoretical vs Empirical Gain
+# Theoretical AG for random noise = 10 * log10(N)
+theoretical_ag = 10 * np.log10(arr.n_sensors)
+
+input_snr = np.nan
+empirical_ag = np.nan
+if not ideal_mode:
+    # Estimate input SNR from config (Source SPL - Path Loss - Noise Floor)
+    # This is a rough theoretical estimation of what hit the array.
+    from propagation import path_loss_db
+    pl = path_loss_db(freq, dist, temp, hum, 101.325, ground, shadowing)
+    input_snr = level - pl - noise
+
+    # Estimate empirical output SNR by measuring the peak vs the average background
+    # We use PAPR as a proxy for empirical output SNR because peak = signal+noise, avg = noise
+    # It's an approximation for the dashboard sanity check.
+    output_snr = papr
+    empirical_ag = output_snr - input_snr
+
+
 # Normalize power to 0 dB max
 max_val = np.max(power_db)
 power_db -= max_val
@@ -161,6 +186,38 @@ def beamwidth_3db(power_db):
 sec_val, sec_az, sec_el = find_secondary_peak(power_db)
 bw = beamwidth_3db(power_db)
 
+st.markdown("### Automated Sanity Check Features")
+sm1, sm2, sm3, sm4 = st.columns(4)
+
+def status_color(val, thresh_good, thresh_bad, invert=False):
+    if invert:
+        if val <= thresh_good: return "#1d7a4c" # green
+        if val >= thresh_bad: return "#c23b3b" # red
+        return "#b8790b" # orange
+    else:
+        if val >= thresh_good: return "#1d7a4c"
+        if val <= thresh_bad: return "#c23b3b"
+        return "#b8790b"
+
+papr_color = status_color(papr, 15, 5)
+with sm1:
+    st.markdown(f'<div class="metric-card" style="border-left: 4px solid {papr_color}"><div class="metric-label">Map PAPR</div><div class="metric-val">{papr:.1f} dB</div><div class="metric-sub">>15dB is sharp, <5dB is noisy</div></div>', unsafe_allow_html=True)
+
+coh_color = status_color(spatial_coh, 0.7, 0.3)
+with sm2:
+    st.markdown(f'<div class="metric-card" style="border-left: 4px solid {coh_color}"><div class="metric-label">Spatial Coherence</div><div class="metric-val">{spatial_coh:.2f}</div><div class="metric-sub">1.0 is perfect wavefield</div></div>', unsafe_allow_html=True)
+
+ag_diff = empirical_ag - theoretical_ag if not ideal_mode else 0
+ag_color = status_color(ag_diff, -3, -10)
+with sm3:
+    st.markdown(f'<div class="metric-card" style="border-left: 4px solid {ag_color}"><div class="metric-label">Empirical Array Gain</div><div class="metric-val">{"N/A" if ideal_mode else f"{empirical_ag:.1f} dB"}</div><div class="metric-sub">Theoretical limit: {theoretical_ag:.1f} dB</div></div>', unsafe_allow_html=True)
+
+isl_color = status_color(isl, -5, 5, invert=True)
+with sm4:
+    st.markdown(f'<div class="metric-card" style="border-left: 4px solid {isl_color}"><div class="metric-label">Integrated Sidelobes</div><div class="metric-val">{isl:.1f} dB</div><div class="metric-sub">< 0dB means mainlobe dominates</div></div>', unsafe_allow_html=True)
+
+
+st.markdown("### Classic Beamformer Metrics")
 m1, m2, m3, m4 = st.columns(4)
 with m1:
     st.markdown(f'<div class="metric-card"><div class="metric-label">Mainlobe SNR</div><div class="metric-val">{"N/A (ideal)" if ideal_mode else f"{np.round(level - noise)} dB"}</div></div>', unsafe_allow_html=True)

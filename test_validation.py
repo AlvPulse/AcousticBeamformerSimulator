@@ -117,6 +117,55 @@ def test_spl_conversion():
     p_rms_expected = 20e-6 * (10**(94.0/20.0))
     assert np.isclose(p_amp, p_rms_expected), "SPL to Pa conversion is incorrect."
 
+from dsp_signal import compute_spatial_coherence
+from beamformer import compute_map_papr, compute_isl
+
+def test_array_processing_metrics():
+    """
+    Validates the array processing automated sanity check metrics (PAPR, ISL, Coherence).
+    """
+    # 1. Coherence on identical signals should be 1.0
+    fs = 48000
+    t = np.arange(1000) / fs
+    sig = np.sin(2 * np.pi * 1000 * t)
+    rec = np.array([sig, sig, sig]) # 3 identical sensors
+    coh = compute_spatial_coherence(rec, fs)
+    assert np.isclose(coh, 1.0, atol=0.01), "Identical signals should have Coherence 1.0"
+
+    # Coherence on pure independent noise should be near 0
+    rec_noise = np.random.randn(3, 10000)
+    coh_noise = compute_spatial_coherence(rec_noise, fs)
+    assert coh_noise < 0.1, "Independent noise should have very low coherence"
+
+    # 2. PAPR test
+    # Create a dummy linear power map: a flat noise floor of 1.0, with a single peak of 100.0
+    grid_az = np.arange(-90, 90, 1.0)
+    grid_el = np.arange(0, 90, 1.0)
+    power_map = np.ones((len(grid_el), len(grid_az)))
+    power_map[45, 90] = 100.0 # Peak in the middle
+
+    # Average = (100 + 1 * (N-1)) / N approx 1.0 for large N
+    # Peak = 100
+    # PAPR = 10 * log10(100 / 1) = 20 dB
+    papr = compute_map_papr(power_map)
+    assert papr > 15.0, "Sharp peak map should have high PAPR (>15dB)"
+
+    # Flat noise map
+    flat_map = np.ones((len(grid_el), len(grid_az)))
+    papr_flat = compute_map_papr(flat_map)
+    assert np.isclose(papr_flat, 0.0, atol=0.1), "Flat map should have 0 dB PAPR"
+
+    # 3. ISL test (Integrated Sidelobe Level)
+    # The peak energy is 100. The sidelobe energy is (N-1)*1
+    # For a 90x180 map, N=16200. Sidelobe energy = 16199.
+    # Mainlobe radius 15 deg. Area roughly pi*15^2 = 706 pixels.
+    # Mainlobe energy = 100 + 705*1 = 805
+    # Sidelobe energy = 16200 - 706 = 15494
+    # ISL = 10*log10(15494 / 805) = ~12.8 dB
+    true_az, true_el = 0.0, 45.0
+    isl = compute_isl(power_map, grid_az, grid_el, true_az, true_el, mainlobe_radius_deg=15.0)
+    assert isl > 10.0, "High background flat map should have high ISL"
+
 def test_advanced_path_loss_statistics():
     """
     Test that the path loss model correctly incorporates deterministic ground effect
