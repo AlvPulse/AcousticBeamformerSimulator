@@ -47,11 +47,12 @@ def get_snr_metrics(arr, sig, freq_weights, target_az, target_el, target_dist, t
     phase = 2 * np.pi * np.outer(tau, freqs[valid_bins])
 
     steered_X_target = X_target * np.exp(1j * phase)
-    Y_target = np.sum(steered_X_target, axis=0)
+    # Use mean to prevent artificial power scaling by N^2 when summing
+    Y_target = np.mean(steered_X_target, axis=0)
     S_out = np.sum(np.abs(Y_target)**2 * weights)
 
     steered_X_noise = X_noise * np.exp(1j * phase)
-    Y_noise = np.sum(steered_X_noise, axis=0)
+    Y_noise = np.mean(steered_X_noise, axis=0)
     N_out = np.sum(np.abs(Y_noise)**2 * weights)
 
     S_in = np.mean([np.sum(np.abs(X_target[i])**2 * weights) for i in range(n_sensors)])
