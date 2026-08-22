@@ -52,36 +52,53 @@ def array_factor(array, freq_hz, look_az, look_el, grid_az, grid_el, c=343.0, sp
 
     return af
 
-def delay_and_sum(recording, array, fs, grid_az, grid_el, c=343.0, spatial_weights=None):
+def generate_harmonic_weights(freqs, f0, n_harmonics, bandwidth_hz):
+    """
+    Generates a comb filter (spectral mask) for a known harmonic target (e.g., FPV or Siren).
+    """
+    mask = np.zeros_like(freqs)
+    for h in range(1, n_harmonics + 1):
+        center = h * f0
+        lower = center - bandwidth_hz / 2
+        upper = center + bandwidth_hz / 2
+        mask[(freqs >= lower) & (freqs <= upper)] = 1.0
+    return mask
+
+def generate_broadband_envelope(freqs):
+    """
+    Generates a broadband 1/f spectral template typical of aircraft or distant machinery.
+    """
+    mask = np.zeros_like(freqs)
+    valid = freqs > 0
+    mask[valid] = 1.0 / freqs[valid]
+    # Normalize mask
+    mask = mask / np.max(mask)
+    return mask
+
+def delay_and_sum(recording, array, fs, grid_az, grid_el, c=343.0, spatial_weights=None, freq_weights=None):
     """
     Stage 1: Conventional Delay-And-Sum (Bartlett) empirical beamformer.
     Steered with a far-field plane-wave assumption.
 
     recording: (n_sensors, n_samples)
+    freq_weights: Optional 1D array of length (NFFT/2), acts as a Spectral Matched Filter before power summation.
     """
     n_sensors, n_samples = recording.shape
     pos = array.positions
 
-    # FFT of recording for frequency domain shifting (faster for grid search than time-domain interpolation)
-    # Actually, we can do it in frequency domain for all frequencies at once, or narrow band.
-    # The prompt implies a broad-band or narrow-band generic DAS.
-    # A standard time-domain DAS:
-    # y(t) = Sum_i w_i * x_i(t - tau_i)
-    # Power = mean(y(t)^2)
-    # Doing this in time domain with interpolation for every grid point is slow.
-    # Doing it in frequency domain:
-    # Y(f) = Sum_i w_i * X_i(f) * exp(-j * 2*pi*f * tau_i)
-    # Power = Sum_f |Y(f)|^2
-
-    # Let's use the Frequency Domain approach
     NFFT = n_samples
     X = np.fft.rfft(recording, n=NFFT, axis=1) # (n_sensors, n_bins)
     freqs = np.fft.rfftfreq(NFFT, 1.0/fs)
 
-    # Ignore DC
     valid_bins = freqs > 0
     X = X[:, valid_bins]
     freqs = freqs[valid_bins]
+
+    if freq_weights is not None:
+        # Align weights to valid bins
+        freq_weights = freq_weights[valid_bins]
+    else:
+        freq_weights = np.ones_like(freqs)
 
     AZ, EL = np.meshgrid(np.deg2rad(grid_az), np.deg2rad(grid_el))
     k_grid_x = np.cos(EL) * np.cos(AZ)
@@ -93,46 +110,79 @@ def delay_and_sum(recording, array, fs, grid_az, grid_el, c=343.0, spatial_weigh
     if spatial_weights is None:
         spatial_weights = np.ones(n_sensors)
 
-    # To optimize memory, we iterate over grid points
     n_el, n_az = AZ.shape
 
     for r in range(n_el):
         for c_idx in range(n_az):
-            # Steering vector direction (towards grid point)
             kx = k_grid_x[r, c_idx]
             ky = k_grid_y[r, c_idx]
             kz = k_grid_z[r, c_idx]
             k_vec = np.array([kx, ky, kz])
 
-            # tau_i = - (p_i dot k_vec) / c
-            # We want to align the signals. If a signal comes from k_vec, it has delay (p_i dot k_vec) / c
-            # To compensate, we apply delay tau_i = - (p_i dot k_vec) / c
             tau = -np.dot(pos, k_vec) / c
-
-            # Beamformed signal in frequency domain
-            # Y(f) = Sum_i w_i * X_i(f) * exp(j * 2*pi*f * tau_i)
-            # (Note sign: if signal arrived with phase -w*tau, we multiply by +w*tau to align)
-
-            # tau is shape (n_sensors,)
-            # freqs is shape (n_bins,)
-            # phase is (n_sensors, n_bins)
             phase = 2 * np.pi * np.outer(tau, freqs)
 
             steered_X = X * np.exp(1j * phase)
-            # Apply weights
             steered_X = steered_X * spatial_weights[:, np.newaxis]
 
-            # Sum over sensors
             Y = np.sum(steered_X, axis=0)
 
-            # Power
-            power = np.sum(np.abs(Y)**2)
+            # Frequency-weighted Power Summation (Matched Filter)
+            weighted_power = np.abs(Y)**2 * freq_weights
+            power = np.sum(weighted_power)
+
             power_map[r, c_idx] = power
 
-    # Normalize
-    power_map /= np.max(power_map)
+    if np.max(power_map) > 0:
+        power_map /= np.max(power_map)
 
     return power_map
+
+def compute_stor(recording, array, fs, target_az, target_el, c=343.0, freq_weights=None):
+    """
+    Computes Steered-To-Omni Ratio (STOR).
+    A low-compute O(1) alternative to PAPR/PMPR.
+    Divides the power steered directly at the target by the average omni-directional power of the mics.
+    If the array successfully aligns the signal, this ratio spikes.
+    """
+    n_sensors, n_samples = recording.shape
+    pos = array.positions
+
+    NFFT = n_samples
+    X = np.fft.rfft(recording, n=NFFT, axis=1)
+    freqs = np.fft.rfftfreq(NFFT, 1.0/fs)
+
+    valid_bins = freqs > 0
+    X = X[:, valid_bins]
+    freqs = freqs[valid_bins]
+
+    if freq_weights is not None:
+        freq_weights = freq_weights[valid_bins]
+    else:
+        freq_weights = np.ones_like(freqs)
+
+    k_vec = np.array([
+        np.cos(np.deg2rad(target_el)) * np.cos(np.deg2rad(target_az)),
+        np.cos(np.deg2rad(target_el)) * np.sin(np.deg2rad(target_az)),
+        np.sin(np.deg2rad(target_el))
+    ])
+
+    tau = -np.dot(pos, k_vec) / c
+    phase = 2 * np.pi * np.outer(tau, freqs)
+
+    # Steered Power
+    steered_X = X * np.exp(1j * phase)
+    Y = np.sum(steered_X, axis=0)
+    steered_power = np.sum(np.abs(Y)**2 * freq_weights)
+
+    # Omni Power (Average power of individual un-steered microphones)
+    # We sum their powers and average them
+    omni_power = np.mean([np.sum(np.abs(X[i])**2 * freq_weights) for i in range(n_sensors)])
+
+    if omni_power <= 0:
+        return 0.0
+
+    return 10 * np.log10(steered_power / omni_power)
 
 def compute_map_papr(power_map_linear):
     """

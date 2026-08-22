@@ -21,7 +21,20 @@
 \textbf{No, this is a misconception.} Tapering (like Blackman or Hanning) does slightly lower your main Peak-to-Average Power Ratio (PAPR), but \textbf{it is absolutely critical when loud interferers exist}.
 If you are operating in a perfectly quiet environment trying to hear a faint drone, do not use tapering. However, if a loud interferer (like wind, a siren, or heavy machinery) is present, \textbf{the un-tapered array will be blinded by the interferer's sidelobes}. Tapering suppresses those sidelobes and rescues the target. (See Figure 1).
 
-\subsection*{Q2: Can we have a simple decision tree or switch case on when the beamformer is trustable?}
+\subsection*{Q2: How can we isolate Specific Targets (FPV Drones/Sirens vs Airplanes) in Negative SNR without blowing our Compute Budget?}
+The fundamental limitation of PAPR is that it relies on summing the power of \textit{all} frequencies equally across a full 90x90 grid. If a broadband wind gust dominates the spectrum, the target is lost.
+Instead of raw power summation, we must use \textbf{Spectral Matched Filtering} inside the beamformer, paired with an $O(1)$ metric:
+
+\begin{enumerate}
+    \item \textbf{Harmonic Comb Filtering (For FPVs/Sirens):}
+    By applying a spectral mask (Comb Filter) at $f_0, 2f_0, 3f_0$, the beamformer completely ignores the broadband wind energy and only integrates power where the drone's signature exists. Our simulations (\texttt{harmonic\_matched\_filter\_fpv.png}) prove this recovers a target even when wind interference exceeds 100 dB SPL.
+    \item \textbf{1/f Envelope Matching (For Flight Radar):}
+    Airplanes are broadband, but they have a known spectral decay. By applying a $1/f$ template as a matched filter, we can successfully extract the aircraft signature from flat-spectrum ambient noise (\texttt{broadband\_envelope\_airplane.png}).
+    \item \textbf{Steered-to-Omni Ratio (STOR) - The O(1) PAPR Alternative:}
+    Calculating PAPR across a full map is computationally intensive. \textbf{STOR} circumvents this by calculating the beamformer power at \textit{only one steered point} (the expected target trajectory) and dividing it by the average raw power of the un-steered microphones. This leverages the array's directional gain to provide a robust confidence metric at virtually zero processing cost.
+\end{enumerate}
+
+\subsection*{Q3: Can we have a simple decision tree or switch case on when the beamformer is trustable?}
 Yes. We have integrated a programmatic decision tree directly into the Python pipeline (`acoustic_sim/decision_logic.py`). The logic flows as follows:
 
 \begin{verbatim}
@@ -43,14 +56,14 @@ Yes. We have integrated a programmatic decision tree directly into the Python pi
        -> Return "TRUST"
 \end{verbatim}
 
-\subsection*{Q3: Do I need both metrics, or is just random SNR at the microphone enough?}
+\subsection*{Q4: Do I need both metrics, or is just random SNR at the microphone enough?}
 \textbf{You strictly need both.}
 \begin{itemize}
     \item \textbf{Microphone SNR (Coherence)} tells you if a wave exists. However, if the source is within 5 meters (Near-Field), the coherence will be perfect, but the Far-Field Plane-Wave beamformer will blur the image.
     \item \textbf{Beamformer PAPR} catches this mathematical blurring. Coherence acts as a fast-gate to save CPU, while PAPR acts as the final image-quality validator.
 \end{itemize}
 
-\subsection*{Q4: What about real interferers? What happens if an interferer moves from 10m to 1km?}
+\subsection*{Q5: What about real interferers? What happens if an interferer moves from 10m to 1km?}
 We simulated this exact scenario: a target emitting $90$ dB fixed at $50$ meters, while a loud $110$ dB interferer (machinery) moves from $10$ m out to $1$ km. The plot below maps the "Target Power" minus the "Interferer Power." If the ratio drops below zero, the target is completely buried by the interferer.
 
 \begin{figure}[h!]
