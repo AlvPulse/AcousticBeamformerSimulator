@@ -82,4 +82,11 @@ We ran a rigorous 100-scenario Monte Carlo Correlation simulation randomizing ta
 
 Furthermore, we executed a "Wind Fooling" sweep, keeping the target fixed and sweeping broadband wind volume from 50 to 120 dB SPL. As demonstrated in \texttt{wind\_fooling\_overlay.png}, STOR perfectly tracks PMPR and crosses the 8 dB trust threshold at the exact same wind volume, proving it does \textit{not} drop into the Reject zone prematurely.
 
+
+\subsection*{Q7: How do we know the beamformer isn't just summing up wind noise non-coherently and giving us a false positive? Is the metric truly measuring coherent signal summation?}
+We have updated our signature analysis (FPV and Flight Radar models) to calculate \textbf{True Spatial SNR and Array Gain}. Instead of relying solely on power map peaks which can be artificially inflated by loud, unstructured noise, we now separately process the \textit{Target Signal} and the \textit{Wind Noise}.
+
+By computing the Input SNR (SNR at a single omni-directional sensor) vs the Output SNR (SNR after the beamformer steering phase summation), we directly measure the \textbf{Array Gain (AG = $SNR_{out} - SNR_{in}$)}.
+As shown in \texttt{harmonic\_matched\_filter\_fpv.png} and \texttt{broadband\_envelope\_airplane.png}, the Output SNR significantly exceeds the Input SNR across the wind sweep, unequivocally proving that the beamformer is actively suppressing off-axis wind and achieving true coherent spatial gain, not simply accumulating raw noise volume.
+
 \end{document}

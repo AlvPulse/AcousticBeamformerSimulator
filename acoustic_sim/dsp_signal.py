@@ -159,7 +159,9 @@ def synthesize_array_recording(array, source_signal, az, el, r,
 
         n_p_amp = spl_db_to_pa(n_lvl)
         noise_sig = np.random.randn(n_samples)
-        noise_sig = noise_sig / np.max(np.abs(noise_sig)) * n_p_amp
+        # Normalize by RMS to match expected SPL power
+        rms_noise = np.sqrt(np.mean(noise_sig**2))
+        noise_sig = (noise_sig / rms_noise) * n_p_amp
 
         n_delays = per_sensor_delays(array, n_az, n_el, n_r, c=env_params['c'])
         n_delays -= np.min(n_delays)

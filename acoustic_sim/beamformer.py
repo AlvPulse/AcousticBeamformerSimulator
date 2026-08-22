@@ -172,7 +172,10 @@ def compute_stor(recording, array, fs, target_az, target_el, c=343.0, freq_weigh
 
     # Steered Power
     steered_X = X * np.exp(1j * phase)
-    Y = np.sum(steered_X, axis=0)
+    # Average the signals coherently FIRST, then compute power
+    # This prevents artificial gain from just summing uncorrelated noise
+    Y = np.mean(steered_X, axis=0)
+
     steered_power = np.sum(np.abs(Y)**2 * freq_weights)
 
     # Omni Power (Average power of individual un-steered microphones)

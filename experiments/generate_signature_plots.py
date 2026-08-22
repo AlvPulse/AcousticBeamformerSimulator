@@ -22,6 +22,50 @@ def compute_target_pmpr(power_map_linear, grid_az, target_az):
     if med <= 0: return 0.0
     return 10 * np.log10(target_power / med)
 
+def get_snr_metrics(arr, sig, freq_weights, target_az, target_el, target_dist, target_spl, wind_az, w_spl, fs, env):
+    dir_noise_off = {"enabled": False}
+    rec_target = synthesize_array_recording(arr, sig, target_az, target_el, target_dist, target_spl, fs, -100, 1000.0, env, directional_noise=dir_noise_off)
+
+    dir_noise_on = {"enabled": True, "spl_db": w_spl, "az": wind_az, "el": 0.0, "r": 20.0}
+    rec_noise = synthesize_array_recording(arr, np.zeros_like(sig), target_az, target_el, target_dist, -100, fs, -100, 1000.0, env, directional_noise=dir_noise_on)
+
+    n_sensors, n_samples = rec_target.shape
+    NFFT = n_samples
+    freqs = np.fft.rfftfreq(NFFT, 1.0/fs)
+    valid_bins = freqs > 0
+    weights = freq_weights[valid_bins] if freq_weights is not None else np.ones(np.sum(valid_bins))
+
+    X_target = np.fft.rfft(rec_target, n=NFFT, axis=1)[:, valid_bins]
+    X_noise = np.fft.rfft(rec_noise, n=NFFT, axis=1)[:, valid_bins]
+
+    k_vec = np.array([
+        np.cos(np.deg2rad(target_el)) * np.cos(np.deg2rad(target_az)),
+        np.cos(np.deg2rad(target_el)) * np.sin(np.deg2rad(target_az)),
+        np.sin(np.deg2rad(target_el))
+    ])
+    tau = -np.dot(arr.positions, k_vec) / 343.0
+    phase = 2 * np.pi * np.outer(tau, freqs[valid_bins])
+
+    steered_X_target = X_target * np.exp(1j * phase)
+    Y_target = np.sum(steered_X_target, axis=0)
+    S_out = np.sum(np.abs(Y_target)**2 * weights)
+
+    steered_X_noise = X_noise * np.exp(1j * phase)
+    Y_noise = np.sum(steered_X_noise, axis=0)
+    N_out = np.sum(np.abs(Y_noise)**2 * weights)
+
+    S_in = np.mean([np.sum(np.abs(X_target[i])**2 * weights) for i in range(n_sensors)])
+    N_in = np.mean([np.sum(np.abs(X_noise[i])**2 * weights) for i in range(n_sensors)])
+
+    if S_in == 0 or N_in == 0 or S_out == 0 or N_out == 0:
+        return 0.0, 0.0, 0.0
+    SNR_in = 10 * np.log10(S_in / N_in)
+    SNR_out = 10 * np.log10(S_out / N_out)
+    AG = SNR_out - SNR_in
+
+    return SNR_in, SNR_out, AG
+
+
 def generate_harmonic_fpv_scenario(out_dir):
     print("Generating Harmonic Matched Filter Scenario (FPV/Siren)...")
     np.random.seed(42)
@@ -52,41 +96,32 @@ def generate_harmonic_fpv_scenario(out_dir):
     freqs = np.fft.rfftfreq(NFFT, 1.0/fs)
     harmonic_weights = generate_harmonic_weights(freqs, f0=200.0, n_harmonics=4, bandwidth_hz=20.0)
 
-    pmpr_broadband = []
-    pmpr_harmonic = []
-    stor_harmonic = []
+    snr_in_list = []
+    snr_out_list = []
+    ag_list = []
 
     for w_spl in wind_spl_sweep:
-        dir_noise = {"enabled": True, "spl_db": w_spl, "az": wind_az, "el": 0.0, "r": 20.0}
-        rec = synthesize_array_recording(arr, sig, target_az, target_el, target_dist, target_spl, fs, 20.0, 1000.0, env, directional_noise=dir_noise)
-
-        # 1. Standard Broadband PMPR
-        pm_bb = delay_and_sum(rec, arr, fs, grid_az, grid_el, c=343.0)
-        pmpr_broadband.append(compute_target_pmpr(pm_bb, grid_az, target_az))
-
-        # 2. Harmonic-Weighted PMPR (Matched Filter)
-        pm_hm = delay_and_sum(rec, arr, fs, grid_az, grid_el, c=343.0, freq_weights=harmonic_weights)
-        pmpr_harmonic.append(compute_target_pmpr(pm_hm, grid_az, target_az))
-
-        # 3. Harmonic STOR (O(1) compute)
-        stor_harmonic.append(compute_stor(rec, arr, fs, target_az, target_el, c=343.0, freq_weights=harmonic_weights))
+        snr_in, snr_out, ag = get_snr_metrics(arr, sig, harmonic_weights, target_az, target_el, target_dist, target_spl, wind_az, w_spl, fs, env)
+        snr_in_list.append(snr_in)
+        snr_out_list.append(snr_out)
+        ag_list.append(ag)
 
     plt.figure(figsize=(10, 6))
-    plt.plot(wind_spl_sweep, pmpr_broadband, 'r-o', label='Standard Broadband PMPR (Fails quickly)')
-    plt.plot(wind_spl_sweep, pmpr_harmonic, 'b-s', label='Harmonic-Weighted PMPR (Comb Filter)')
-    plt.plot(wind_spl_sweep, stor_harmonic, 'g-^', label='Harmonic STOR (O(1) Compute Alternative)')
+    plt.plot(wind_spl_sweep, snr_in_list, 'r--', label='Input SNR (Single Sensor)')
+    plt.plot(wind_spl_sweep, snr_out_list, 'g-s', label='Output SNR (Beamformed)')
+    plt.plot(wind_spl_sweep, ag_list, 'b-^', label='Array Gain (AG = SNR_out - SNR_in)')
 
     plt.axhline(8.0, color='gray', linestyle='--', label='Trust Threshold (8 dB)')
 
-    plt.axhspan(0, 8, color='red', alpha=0.1, label='Signal Lost in Broadband Wind')
-    plt.axhspan(8, 45, color='green', alpha=0.1, label='Target Recovered')
+    plt.axhspan(-40, 8, color='red', alpha=0.1, label='Signal Lost')
+    plt.axhspan(8, 50, color='green', alpha=0.1, label='Target Recovered (Trust Zone)')
 
     plt.xlabel('Broadband Wind Interferer Volume (SPL dB)')
-    plt.ylabel('Target Detection Metric (dB)')
-    plt.title('Harmonic Power Matching vs Broadband Interferers\n(Extracting FPV/Siren signatures using Comb Filters)')
+    plt.ylabel('Signal-to-Noise Ratio / Gain (dB)')
+    plt.title('True Spatial Filtering Performance vs Broadband Wind (FPV/Siren)\n(Proving Coherent Summation over Wind Accumulation)')
     plt.grid(True, alpha=0.3)
     plt.legend(loc='upper right')
-    plt.ylim(0, 45)
+    plt.ylim(-40, 50)
     plt.xlim(60, 110)
     plt.tight_layout()
     plt.savefig(os.path.join(out_dir, 'harmonic_matched_filter_fpv.png'), dpi=300)
@@ -124,38 +159,32 @@ def generate_airplane_envelope_scenario(out_dir):
     grid_az = np.linspace(-90, 90, 90)
     grid_el = np.array([45.0])
 
-    pmpr_naive = []
-    pmpr_envelope = []
-    stor_envelope = []
+    snr_in_list = []
+    snr_out_list = []
+    ag_list = []
 
     for w_spl in wind_spl_sweep:
-        dir_noise = {"enabled": True, "spl_db": w_spl, "az": wind_az, "el": 0.0, "r": 20.0}
-        rec = synthesize_array_recording(arr, sig, target_az, target_el, target_dist, target_spl, fs, 20.0, 1000.0, env, directional_noise=dir_noise)
-
-        pm_naive = delay_and_sum(rec, arr, fs, grid_az, grid_el, c=343.0)
-        pmpr_naive.append(compute_target_pmpr(pm_naive, grid_az, target_az))
-
-        pm_env = delay_and_sum(rec, arr, fs, grid_az, grid_el, c=343.0, freq_weights=envelope)
-        pmpr_envelope.append(compute_target_pmpr(pm_env, grid_az, target_az))
-
-        stor_envelope.append(compute_stor(rec, arr, fs, target_az, target_el, c=343.0, freq_weights=envelope))
+        snr_in, snr_out, ag = get_snr_metrics(arr, sig, envelope, target_az, target_el, target_dist, target_spl, wind_az, w_spl, fs, env)
+        snr_in_list.append(snr_in)
+        snr_out_list.append(snr_out)
+        ag_list.append(ag)
 
     plt.figure(figsize=(10, 6))
-    plt.plot(wind_spl_sweep, pmpr_naive, 'r-o', label='Naive Broadband PMPR')
-    plt.plot(wind_spl_sweep, pmpr_envelope, 'b-s', label='1/f Envelope Matched PMPR')
-    plt.plot(wind_spl_sweep, stor_envelope, 'g-^', label='1/f Envelope STOR (O(1))')
+    plt.plot(wind_spl_sweep, snr_in_list, 'r--', label='Input SNR (Single Sensor)')
+    plt.plot(wind_spl_sweep, snr_out_list, 'g-s', label='Output SNR (Beamformed)')
+    plt.plot(wind_spl_sweep, ag_list, 'b-^', label='Array Gain (AG = SNR_out - SNR_in)')
 
     plt.axhline(8.0, color='gray', linestyle='--', label='Trust Threshold (8 dB)')
 
-    plt.axhspan(0, 8, color='red', alpha=0.1)
-    plt.axhspan(8, 45, color='green', alpha=0.1)
+    plt.axhspan(-40, 8, color='red', alpha=0.1, label='Signal Lost')
+    plt.axhspan(8, 50, color='green', alpha=0.1, label='Target Recovered (Trust Zone)')
 
     plt.xlabel('Broadband Wind Interferer Volume (SPL dB)')
-    plt.ylabel('Target Detection Metric (dB)')
-    plt.title('Flight Radar: Envelope Matching for Broadband Targets\n(Using 1/f Spectral Templates)')
+    plt.ylabel('Signal-to-Noise Ratio / Gain (dB)')
+    plt.title('Flight Radar: Spatial Filtering Performance vs Broadband Wind\n(Proving Coherent Summation over Wind Accumulation)')
     plt.grid(True, alpha=0.3)
     plt.legend(loc='upper right')
-    plt.ylim(0, 45)
+    plt.ylim(-40, 50)
     plt.xlim(60, 100)
     plt.tight_layout()
     plt.savefig(os.path.join(out_dir, 'broadband_envelope_airplane.png'), dpi=300)
