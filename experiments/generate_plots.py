@@ -2,6 +2,7 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import coherence
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from acoustic_sim.dsp_array import ArrayGeometry
@@ -51,7 +52,7 @@ def main():
         # Coherence
         c_q = 0.0
         for i in range(N-1):
-            f, Cxy = __import__('scipy.signal', fromlist=['']).coherence(rec_q[i], rec_q[i+1], fs, nperseg=256)
+            f, Cxy = coherence(rec_q[i], rec_q[i+1], fs, nperseg=256)
             c_q += np.mean(Cxy)
         coh_quiet.append(c_q / (N-1))
 
@@ -64,7 +65,7 @@ def main():
                                            directional_noise={"enabled": True, "spl_db": 60.0, "az": -45.0, "el": 10.0, "r": 50.0})
         c_w = 0.0
         for i in range(N-1):
-            f, Cxy = __import__('scipy.signal', fromlist=['']).coherence(rec_w[i], rec_w[i+1], fs, nperseg=256)
+            f, Cxy = coherence(rec_w[i], rec_w[i+1], fs, nperseg=256)
             c_w += np.mean(Cxy)
         coh_wind.append(c_w / (N-1))
 

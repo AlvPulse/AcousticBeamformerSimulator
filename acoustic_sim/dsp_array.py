@@ -47,9 +47,11 @@ class ArrayGeometry:
 
         raise ValueError(f"Unknown window type: {window_type}")
 
+import ast
+
 def load_array(filepath) -> ArrayGeometry:
     """
-    Loads array geometry from a text file.
+    Loads array geometry from a text file safely.
     Expects lines like:
     x=[...]
     y=[...]
@@ -61,12 +63,12 @@ def load_array(filepath) -> ArrayGeometry:
         for line in f:
             line = line.strip()
             if line.startswith('x='):
-                # parse the list
+                # parse the list safely
                 val_str = line.split('=', 1)[1]
-                x_vals = eval(val_str)
+                x_vals = ast.literal_eval(val_str)
             elif line.startswith('y='):
                 val_str = line.split('=', 1)[1]
-                y_vals = eval(val_str)
+                y_vals = ast.literal_eval(val_str)
 
     if not x_vals or not y_vals:
         raise ValueError(f"Could not parse x and y coordinates from {filepath}")

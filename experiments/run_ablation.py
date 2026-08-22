@@ -3,6 +3,8 @@ import time
 import pandas as pd
 import sys
 import os
+from scipy.signal import coherence
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from acoustic_sim.dsp_array import ArrayGeometry
@@ -64,7 +66,7 @@ def run_ablation_study():
             coh = 0.0
             count = 0
             for i in range(N-1):
-                f, Cxy = __import__('scipy.signal', fromlist=['']).coherence(recording[i], recording[i+1], fs, nperseg=256)
+                f, Cxy = coherence(recording[i], recording[i+1], fs, nperseg=256)
                 coh += np.mean(Cxy)
                 count += 1
             coh /= count

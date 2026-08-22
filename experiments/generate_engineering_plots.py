@@ -2,6 +2,7 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import coherence
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from acoustic_sim.dsp_array import ArrayGeometry
@@ -50,7 +51,7 @@ def generate_approaching_target_scenario(out_dir):
             # Fast Coh
             coh = 0.0
             for i in range(N-1):
-                _, Cxy = __import__('scipy.signal', fromlist=['']).coherence(rec[i], rec[i+1], fs, nperseg=256)
+                _, Cxy = coherence(rec[i], rec[i+1], fs, nperseg=256)
                 coh += np.mean(Cxy)
             cohs.append(coh / (N-1))
 
