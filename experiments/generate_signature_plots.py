@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from acoustic_sim.dsp_array import ArrayGeometry
 from acoustic_sim.dsp_signal import tone_burst, synthesize_array_recording
-from acoustic_sim.beamformer import (delay_and_sum, compute_map_papr, compute_stor,
+from acoustic_sim.beamformer import (delay_and_sum, compute_map_papr, compute_stor, compute_phase_stor,
                                      generate_harmonic_weights, generate_broadband_envelope)
 
 def compute_target_pmpr(power_map_linear, grid_az, target_az):
@@ -99,6 +99,10 @@ def generate_harmonic_fpv_scenario(out_dir):
     snr_in_list = []
     snr_out_list = []
     ag_list = []
+    pmpr_list = []
+    stor_list = []
+    phase_stor_list = []
+    papr_list = []
 
     for w_spl in wind_spl_sweep:
         snr_in, snr_out, ag = get_snr_metrics(arr, sig, harmonic_weights, target_az, target_el, target_dist, target_spl, wind_az, w_spl, fs, env)
@@ -106,10 +110,24 @@ def generate_harmonic_fpv_scenario(out_dir):
         snr_out_list.append(snr_out)
         ag_list.append(ag)
 
+        # Calculate standard metrics on the combined scenario
+        dir_noise_on = {"enabled": True, "spl_db": w_spl, "az": wind_az, "el": 0.0, "r": 20.0}
+        rec_both = synthesize_array_recording(arr, sig, target_az, target_el, target_dist, target_spl, fs, -100, 1000.0, env, directional_noise=dir_noise_on)
+        pm_hm = delay_and_sum(rec_both, arr, fs, grid_az, grid_el, c=343.0, freq_weights=harmonic_weights)
+
+        pmpr_list.append(compute_target_pmpr(pm_hm, grid_az, target_az))
+        stor_list.append(compute_stor(rec_both, arr, fs, target_az, target_el, c=343.0, freq_weights=harmonic_weights))
+        phase_stor_list.append(compute_phase_stor(rec_both, arr, fs, target_az, target_el, c=343.0, freq_weights=harmonic_weights))
+        papr_list.append(compute_map_papr(pm_hm))
+
     plt.figure(figsize=(10, 6))
     plt.plot(wind_spl_sweep, snr_in_list, 'r--', label='Input SNR (Single Sensor)')
     plt.plot(wind_spl_sweep, snr_out_list, 'g-s', label='Output SNR (Beamformed)')
     plt.plot(wind_spl_sweep, ag_list, 'b-^', label='Array Gain (AG = SNR_out - SNR_in)')
+    plt.plot(wind_spl_sweep, pmpr_list, 'm-o', label='Matched PMPR (Target-to-Median)')
+    plt.plot(wind_spl_sweep, stor_list, 'c-d', label='Matched STOR (Steered-to-Omni)')
+    plt.plot(wind_spl_sweep, phase_stor_list, 'y-v', label='Phase-STOR (SRP-PHAT)')
+    plt.plot(wind_spl_sweep, papr_list, 'k-x', label='Matched PAPR (Peak-to-Average)')
 
     plt.axhline(8.0, color='gray', linestyle='--', label='Trust Threshold (8 dB)')
 
@@ -162,6 +180,10 @@ def generate_airplane_envelope_scenario(out_dir):
     snr_in_list = []
     snr_out_list = []
     ag_list = []
+    pmpr_list = []
+    stor_list = []
+    phase_stor_list = []
+    papr_list = []
 
     for w_spl in wind_spl_sweep:
         snr_in, snr_out, ag = get_snr_metrics(arr, sig, envelope, target_az, target_el, target_dist, target_spl, wind_az, w_spl, fs, env)
@@ -169,10 +191,24 @@ def generate_airplane_envelope_scenario(out_dir):
         snr_out_list.append(snr_out)
         ag_list.append(ag)
 
+        # Calculate standard metrics on the combined scenario
+        dir_noise_on = {"enabled": True, "spl_db": w_spl, "az": wind_az, "el": 0.0, "r": 20.0}
+        rec_both = synthesize_array_recording(arr, sig, target_az, target_el, target_dist, target_spl, fs, -100, 1000.0, env, directional_noise=dir_noise_on)
+        pm_env = delay_and_sum(rec_both, arr, fs, grid_az, grid_el, c=343.0, freq_weights=envelope)
+
+        pmpr_list.append(compute_target_pmpr(pm_env, grid_az, target_az))
+        stor_list.append(compute_stor(rec_both, arr, fs, target_az, target_el, c=343.0, freq_weights=envelope))
+        phase_stor_list.append(compute_phase_stor(rec_both, arr, fs, target_az, target_el, c=343.0, freq_weights=envelope))
+        papr_list.append(compute_map_papr(pm_env))
+
     plt.figure(figsize=(10, 6))
     plt.plot(wind_spl_sweep, snr_in_list, 'r--', label='Input SNR (Single Sensor)')
     plt.plot(wind_spl_sweep, snr_out_list, 'g-s', label='Output SNR (Beamformed)')
     plt.plot(wind_spl_sweep, ag_list, 'b-^', label='Array Gain (AG = SNR_out - SNR_in)')
+    plt.plot(wind_spl_sweep, pmpr_list, 'm-o', label='Matched PMPR (Target-to-Median)')
+    plt.plot(wind_spl_sweep, stor_list, 'c-d', label='Matched STOR (Steered-to-Omni)')
+    plt.plot(wind_spl_sweep, phase_stor_list, 'y-v', label='Phase-STOR (SRP-PHAT)')
+    plt.plot(wind_spl_sweep, papr_list, 'k-x', label='Matched PAPR (Peak-to-Average)')
 
     plt.axhline(8.0, color='gray', linestyle='--', label='Trust Threshold (8 dB)')
 

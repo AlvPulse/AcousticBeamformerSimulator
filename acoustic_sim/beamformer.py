@@ -138,6 +138,57 @@ def delay_and_sum(recording, array, fs, grid_az, grid_el, c=343.0, spatial_weigh
 
     return power_map
 
+def compute_phase_stor(recording, array, fs, target_az, target_el, c=343.0, freq_weights=None):
+    """
+    Computes Phase-STOR (SRP-PHAT style).
+    Normalizes each frequency bin by its magnitude before steering,
+    making the metric purely phase-dependent. Highly resistant to
+    loud amplitude noise (like wind gusts).
+    """
+    n_sensors, n_samples = recording.shape
+    pos = array.positions
+
+    NFFT = n_samples
+    X = np.fft.rfft(recording, n=NFFT, axis=1)
+    freqs = np.fft.rfftfreq(NFFT, 1.0/fs)
+
+    valid_bins = freqs > 0
+    X = X[:, valid_bins]
+    freqs = freqs[valid_bins]
+
+    # Apply PHAT (Phase Transform) normalization
+    magnitudes = np.abs(X)
+    # Avoid division by zero
+    magnitudes[magnitudes < 1e-10] = 1e-10
+    X_phat = X / magnitudes
+
+    if freq_weights is not None:
+        freq_weights = freq_weights[valid_bins]
+    else:
+        freq_weights = np.ones_like(freqs)
+
+    k_vec = np.array([
+        np.cos(np.deg2rad(target_el)) * np.cos(np.deg2rad(target_az)),
+        np.cos(np.deg2rad(target_el)) * np.sin(np.deg2rad(target_az)),
+        np.sin(np.deg2rad(target_el))
+    ])
+
+    tau = -np.dot(pos, k_vec) / c
+    phase = 2 * np.pi * np.outer(tau, freqs)
+
+    steered_X = X_phat * np.exp(1j * phase)
+    # Average the signals coherently FIRST
+    Y = np.mean(steered_X, axis=0)
+
+    steered_power = np.sum(np.abs(Y)**2 * freq_weights)
+
+    omni_power = np.mean([np.sum(np.abs(X_phat[i])**2 * freq_weights) for i in range(n_sensors)])
+
+    if omni_power <= 0:
+        return 0.0
+
+    return 10 * np.log10(steered_power / omni_power)
+
 def compute_stor(recording, array, fs, target_az, target_el, c=343.0, freq_weights=None):
     """
     Computes Steered-To-Omni Ratio (STOR).
