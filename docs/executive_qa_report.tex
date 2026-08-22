@@ -1,0 +1,65 @@
+\documentclass[12pt,letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\geometry{margin=1in}
+
+\title{\textbf{Acoustic Array Executive Briefing}\\ \Large Decision Logic and Interferer Mitigation}
+\author{Acoustic Sensor Systems Team}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Executive Q\&A}
+
+\subsection*{Q1: So the total conclusion is to avoid tapering? It's not going to help us, right?}
+\textbf{No, this is a misconception.} Tapering (like Blackman or Hanning) does slightly lower your main Peak-to-Average Power Ratio (PAPR), but \textbf{it is absolutely critical when loud interferers exist}.
+If you are operating in a perfectly quiet environment trying to hear a faint drone, do not use tapering. However, if a loud interferer (like wind, a siren, or heavy machinery) is present, \textbf{the un-tapered array will be blinded by the interferer's sidelobes}. Tapering suppresses those sidelobes and rescues the target. (See Figure 1).
+
+\subsection*{Q2: Can we have a simple decision tree or switch case on when the beamformer is trustable?}
+Yes. We have integrated a programmatic decision tree directly into the Python pipeline (`acoustic_sim/decision_logic.py`). The logic flows as follows:
+
+\begin{verbatim}
+1. Evaluate Coherence (Microphone Level)
+   If Coherence < 0.10:
+       -> Return "REJECT_NOISE_FLOOR" (Target is buried)
+
+2. Evaluate PAPR (Beamformer Level)
+   If PAPR < 5.0 dB:
+       -> Return "REJECT_SMEARED" (Near-field mismatch or bad focus)
+
+3. Evaluate ISL (Sidelobe Level)
+   If ISL > 0.0 dB:
+       -> If Tapering == False: Return "WARNING_RETRY_WITH_TAPERING"
+       -> If Tapering == True: Return "REJECT_SEVERE_ALIASING"
+
+4. Final Trust Boundary
+   If PAPR > 10.0 dB (or > 8.0 dB with Tapering):
+       -> Return "TRUST"
+\end{verbatim}
+
+\subsection*{Q3: Do I need both metrics, or is just random SNR at the microphone enough?}
+\textbf{You strictly need both.}
+\begin{itemize}
+    \item \textbf{Microphone SNR (Coherence)} tells you if a wave exists. However, if the source is within 5 meters (Near-Field), the coherence will be perfect, but the Far-Field Plane-Wave beamformer will blur the image.
+    \item \textbf{Beamformer PAPR} catches this mathematical blurring. Coherence acts as a fast-gate to save CPU, while PAPR acts as the final image-quality validator.
+\end{itemize}
+
+\subsection*{Q4: What about real interferers? What happens if an interferer moves from 10m to 1km?}
+We simulated this exact scenario: a target emitting $90$ dB fixed at $50$ meters, while a loud $110$ dB interferer (machinery) moves from $10$ m out to $1$ km. The plot below maps the "Target Power" minus the "Interferer Power." If the ratio drops below zero, the target is completely buried by the interferer.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.85\textwidth]{figures/interferer_distance_scenario.png}
+    \caption{Without tapering, the $110$ dB interferer's sidelobes blind the array to the target when the interferer is anywhere closer than $100$ meters. With Hanning Tapering, the array successfully suppresses the interferer's sidelobes, allowing detection even when the interferer is $30$ meters away.}
+    \label{fig:interferer}
+\end{figure}
+
+As shown, \textbf{Tapering saves the array}. It allows the beamformer to ignore loud, close interferers that would otherwise completely flood the spatial map with false peaks.
+
+\end{document}
