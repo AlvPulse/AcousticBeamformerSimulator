@@ -36,7 +36,7 @@ def load_wav(filepath, fs_target=None) -> np.ndarray:
 def spl_db_to_pa(spl_db, p_ref=20e-6) -> float:
     return p_ref * (10.0 ** (spl_db / 20.0))
 
-def compute_spatial_coherence(recording, fs, nperseg=256):
+def compute_spatial_coherence(recording, fs, nperseg=1024):
     """
     Computes the average magnitude squared coherence between all unique pairs of sensors.
     This gives a scalar [0, 1] indicating how correlated the wavefield is across the array.

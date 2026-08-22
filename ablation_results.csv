@@ -1,0 +1,25 @@
+Distance (m),Noise Env,Tapering,Coherence,Map PAPR (dB),ISL (dB),Trust?,T_Coh (ms),T_BF (ms)
+10.0,Low Noise (Quiet),none,0.127,14.0,-5.1,Yes,348.6,1642.1
+10.0,Low Noise (Quiet),hanning,0.127,12.5,-4.6,Yes,348.6,1643.5
+10.0,High Sensor Noise,none,0.088,13.6,-3.8,No,346.1,1631.9
+10.0,High Sensor Noise,hanning,0.088,12.1,-3.4,No,346.1,1632.4
+10.0,High Ambient (Wind),none,0.161,14.0,-5.1,Yes,346.3,1640.1
+10.0,High Ambient (Wind),hanning,0.161,12.5,-4.6,Yes,346.3,1632.5
+50.0,Low Noise (Quiet),none,0.105,14.0,-5.2,Yes,383.5,1634.1
+50.0,Low Noise (Quiet),hanning,0.105,12.5,-4.6,Yes,383.5,1636.0
+50.0,High Sensor Noise,none,0.076,9.2,4.2,No,346.1,1636.8
+50.0,High Sensor Noise,hanning,0.076,7.5,4.6,No,346.1,1639.4
+50.0,High Ambient (Wind),none,0.134,14.0,-5.1,Yes,349.7,1639.0
+50.0,High Ambient (Wind),hanning,0.134,12.5,-4.6,Yes,349.7,1637.2
+100.0,Low Noise (Quiet),none,0.097,14.0,-5.0,No,347.6,1637.3
+100.0,Low Noise (Quiet),hanning,0.097,12.4,-4.5,No,347.6,1641.1
+100.0,High Sensor Noise,none,0.069,5.0,8.2,No,349.0,1637.3
+100.0,High Sensor Noise,hanning,0.069,3.8,8.3,No,349.0,1633.0
+100.0,High Ambient (Wind),none,0.123,14.0,-5.0,Yes,347.5,1670.4
+100.0,High Ambient (Wind),hanning,0.123,12.4,-4.5,Yes,347.5,1642.2
+200.0,Low Noise (Quiet),none,0.093,13.9,-4.5,No,349.2,1643.5
+200.0,Low Noise (Quiet),hanning,0.093,12.3,-4.0,No,349.2,1681.6
+200.0,High Sensor Noise,none,0.064,1.9,10.3,No,347.8,1652.4
+200.0,High Sensor Noise,hanning,0.064,1.3,10.4,No,347.8,1651.5
+200.0,High Ambient (Wind),none,0.117,13.8,-4.3,Yes,340.4,1638.2
+200.0,High Ambient (Wind),hanning,0.117,12.2,-3.8,Yes,340.4,1632.6
