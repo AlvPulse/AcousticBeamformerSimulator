@@ -2,10 +2,10 @@ import yaml
 import numpy as np
 import matplotlib.pyplot as plt
 
-from dsp_array import load_array, aliasing_frequency
-from dsp_signal import tone_burst, chirp, noise_burst, load_wav, synthesize_array_recording, highpass_filter
-from beamformer import array_factor, delay_and_sum
-from plots import plot_az_el_heatmap, plot_1d_cuts
+from acoustic_sim.dsp_array import load_array, aliasing_frequency
+from acoustic_sim.dsp_signal import tone_burst, chirp, noise_burst, load_wav, synthesize_array_recording, highpass_filter
+from acoustic_sim.beamformer import array_factor, delay_and_sum
+from acoustic_sim.plots import plot_az_el_heatmap, plot_1d_cuts
 
 def main():
     # 1. Load config

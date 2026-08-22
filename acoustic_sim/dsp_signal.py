@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import signal as scipy_signal
 import scipy.io.wavfile as wavfile
-from propagation import per_sensor_delays, path_loss_db
+from acoustic_sim.propagation import per_sensor_delays, path_loss_db
 
 def tone_burst(freq_hz, duration_s, fs) -> np.ndarray:
     t = np.arange(int(duration_s * fs)) / fs
@@ -133,7 +133,7 @@ def synthesize_array_recording(array, source_signal, az, el, r,
         # Path loss uses distance from sensor to source
         # Let's compute exact distance for PL
         p_i = array.positions[i]
-        from propagation import spherical_to_cartesian
+        from acoustic_sim.propagation import spherical_to_cartesian
         p_s = spherical_to_cartesian(r, az, el)
         r_i = np.linalg.norm(p_s - p_i)
 

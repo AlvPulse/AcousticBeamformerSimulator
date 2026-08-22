@@ -4,9 +4,9 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 import io
 
-from dsp_array import ArrayGeometry
-from dsp_signal import tone_burst, synthesize_array_recording, compute_spatial_coherence
-from beamformer import array_factor, delay_and_sum, compute_map_papr, compute_isl
+from acoustic_sim.dsp_array import ArrayGeometry
+from acoustic_sim.dsp_signal import tone_burst, synthesize_array_recording, compute_spatial_coherence
+from acoustic_sim.beamformer import array_factor, delay_and_sum, compute_map_papr, compute_isl
 
 st.set_page_config(page_title="Acoustic Array Diagnostics", layout="wide")
 
@@ -126,7 +126,7 @@ empirical_ag = np.nan
 if not ideal_mode:
     # Estimate input SNR from config (Source SPL - Path Loss - Noise Floor)
     # This is a rough theoretical estimation of what hit the array.
-    from propagation import path_loss_db
+    from acoustic_sim.propagation import path_loss_db
     pl = path_loss_db(freq, dist, temp, hum, 101.325, ground, shadowing)
     input_snr = level - pl - noise
 

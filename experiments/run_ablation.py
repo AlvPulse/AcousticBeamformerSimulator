@@ -1,10 +1,14 @@
 import numpy as np
 import time
 import pandas as pd
-from dsp_array import ArrayGeometry
-from dsp_signal import tone_burst, synthesize_array_recording, compute_spatial_coherence
-from beamformer import delay_and_sum, compute_map_papr, compute_isl
-from propagation import path_loss_db
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from acoustic_sim.dsp_array import ArrayGeometry
+from acoustic_sim.dsp_signal import tone_burst, synthesize_array_recording, compute_spatial_coherence
+from acoustic_sim.beamformer import delay_and_sum, compute_map_papr, compute_isl
+from acoustic_sim.propagation import path_loss_db
 
 def run_ablation_study():
     np.random.seed(42) # For reproducible noise
@@ -95,7 +99,9 @@ def run_ablation_study():
     df = pd.DataFrame(results)
     print("=== N=64 Array Ablation Study Results ===")
     print(df.to_markdown(index=False))
-    df.to_csv("ablation_results.csv", index=False)
+    out_dir = os.path.join(os.path.dirname(__file__), 'results')
+    os.makedirs(out_dir, exist_ok=True)
+    df.to_csv(os.path.join(out_dir, "ablation_results.csv"), index=False)
 
 if __name__ == "__main__":
     run_ablation_study()

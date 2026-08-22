@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from dsp_array import ArrayGeometry, aliasing_frequency
-from propagation import iso9613_absorption_db_per_m, path_loss_db, per_sensor_delays
-from dsp_signal import tone_burst, apply_fractional_delay, spl_db_to_pa
-from beamformer import array_factor, delay_and_sum
+from acoustic_sim.dsp_array import ArrayGeometry, aliasing_frequency
+from acoustic_sim.propagation import iso9613_absorption_db_per_m, path_loss_db, per_sensor_delays
+from acoustic_sim.dsp_signal import tone_burst, apply_fractional_delay, spl_db_to_pa
+from acoustic_sim.beamformer import array_factor, delay_and_sum
 
 def test_iso9613_absorption():
     """
@@ -117,8 +117,8 @@ def test_spl_conversion():
     p_rms_expected = 20e-6 * (10**(94.0/20.0))
     assert np.isclose(p_amp, p_rms_expected), "SPL to Pa conversion is incorrect."
 
-from dsp_signal import compute_spatial_coherence
-from beamformer import compute_map_papr, compute_isl
+from acoustic_sim.dsp_signal import compute_spatial_coherence
+from acoustic_sim.beamformer import compute_map_papr, compute_isl
 
 def test_array_processing_metrics():
     """
