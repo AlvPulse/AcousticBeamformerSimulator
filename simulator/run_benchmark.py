@@ -1,0 +1,129 @@
+import os
+import pandas as pd
+import numpy as np
+import librosa
+from simulator.acoustics.array import generate_log_spiral_array
+from simulator.acoustics.scene_generator import generate_scene
+from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV
+from simulator.evaluation import compute_si_sdr, compute_lsd, compute_sir, evaluate_lam_preservation, Profiler
+
+def run_benchmark():
+    # Setup
+    fs = 16000
+    duration_sec = 2.0
+    esc50_sample = "data/esc50_samples/1-137-A-32.wav"
+
+    if not os.path.exists(esc50_sample):
+        print("Warning: ESC-50 sample missing. Falling back to synthetic tone.")
+        s = np.sin(2 * np.pi * 1000 * np.linspace(0, duration_sec, int(fs*duration_sec)))
+        import soundfile as sf
+        os.makedirs("data/esc50_samples", exist_ok=True)
+        sf.write(esc50_sample, s, fs)
+
+    array_positions = generate_log_spiral_array(n_sensors=50, aperture_m=2.5)
+
+    scenarios = [
+        # S1: Near-Far Power Dynamic (High INR)
+        {"id": "S1", "target_snr": -15, "interferer_inr": 35, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0},
+        # S2: Target Distance & Negative SNR
+        {"id": "S2", "target_snr": -25, "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0},
+        # S3: Atmospheric Turbulence
+        {"id": "S3", "target_snr": -10, "interferer_inr": 20, "turbulence_sigma": 30.0, "num_rand": 1, "target_look_error": 0.0},
+        # S6: Target Look-Direction Error (Crucial for LCMV flaw)
+        {"id": "S6", "target_snr": -10, "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 5.0},
+        # S7: Multiple Random Interferers (DoF limits)
+        {"id": "S7", "target_snr": -10, "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 5, "target_look_error": 0.0},
+    ]
+
+    beamformers = {
+        "DAS": TaperedDAS(fs=fs),
+        "LCMV": LCMV_SMI(fs=fs),
+        "RobustLCMV_PhaseSTOR": RobustLCMV(fs=fs, use_phase_stor=True),
+        "RobustLCMV_CMT": RobustLCMV(fs=fs, use_cmt=True)
+    }
+
+    results = []
+
+    # Run sweeps (For demo, 1 seed per scenario. In prod, loop over seeds)
+    num_seeds = 2 # Keeping it small for local execution speed
+
+    for scene_cfg in scenarios:
+        print(f"\nRunning Scenario {scene_cfg['id']}...")
+
+        for seed in range(num_seeds):
+            np.random.seed(seed)
+
+            target_az = 45.0
+            target_el = 0.0
+
+            # Generate multi-channel scene
+            mixture, tgt_multi, int_multi, noise_multi = generate_scene(
+                target_audio_path=esc50_sample,
+                array_positions=array_positions,
+                fs=fs, target_az=target_az, target_el=target_el,
+                target_snr=scene_cfg["target_snr"],
+                interferer_inr=scene_cfg["interferer_inr"],
+                turbulence_sigma=scene_cfg["turbulence_sigma"],
+                duration_sec=duration_sec,
+                num_random_interferers=scene_cfg["num_rand"]
+            )
+
+            # Reference baseline is center mic (index 0)
+            center_mic = mixture[0]
+            clean_tgt = tgt_multi[0]
+
+            # Evaluate each beamformer
+            for name, bf in beamformers.items():
+                prof = Profiler()
+                prof.start()
+
+                # Apply look-direction error if applicable
+                steer_az = target_az + scene_cfg["target_look_error"]
+
+                y_out = bf.process(mixture, array_positions, steer_az, target_el)
+
+                perf = prof.stop(duration_sec)
+
+                # Calculate Metrics
+                sisdr = compute_si_sdr(clean_tgt, y_out)
+                sisdr_base = compute_si_sdr(clean_tgt, center_mic)
+                delta_sisdr = sisdr - sisdr_base
+
+                lsd = compute_lsd(clean_tgt, y_out)
+
+                # LAM feature integrity
+                lam_stats = evaluate_lam_preservation(clean_tgt, y_out, fs)
+
+                # Export audio stream
+                out_audio_dir = "docs/audio_outputs"
+                os.makedirs(out_audio_dir, exist_ok=True)
+                audio_filename = f"{out_audio_dir}/{scene_cfg['id']}_seed{seed}_{name}.wav"
+                import soundfile as sf
+                sf.write(audio_filename, y_out, fs)
+
+                res = {
+                    "Scenario": scene_cfg["id"],
+                    "Seed": seed,
+                    "Beamformer": name,
+                    "Delta_SISDR_dB": delta_sisdr,
+                    "LSD": lsd,
+                    "LAM_CosineSim": lam_stats["embedding_similarity"],
+                    "LAM_Top1Match": lam_stats["top1_match"],
+                    "RTF": perf["rtf"]
+                }
+                results.append(res)
+
+    df = pd.DataFrame(results)
+
+    os.makedirs("docs", exist_ok=True)
+    csv_path = "docs/benchmark_results.csv"
+    df.to_csv(csv_path, index=False)
+    print(f"\nBenchmarking Complete. Results saved to {csv_path}")
+
+    # Print summary
+    summary = df.groupby(["Scenario", "Beamformer"]).mean(numeric_only=True)
+    print("\nMean Performance Summary:")
+    print(summary[["Delta_SISDR_dB", "LSD", "LAM_CosineSim", "LAM_Top1Match", "RTF"]])
+
+if __name__ == "__main__":
+    run_benchmark()
