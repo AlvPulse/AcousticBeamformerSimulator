@@ -108,12 +108,44 @@ if __name__ == "__main__":
 
     # If the directory is empty, we'll create a couple dummy files just to prove it works
     if not glob.glob(os.path.join(INPUT_DIR, "*.wav")):
-        print(f"No real data found in {INPUT_DIR}. Generating dummy multichannel files to test the script...")
+        print(f"No real data found in {INPUT_DIR}. Generating coherent synthetic multichannel files to test the script...")
         fs = 16000
-        n_mics = 16 # Based on the array_geo.txt
-        for i in range(3):
-            dummy = np.random.randn(n_mics, fs * 2) * 0.1 # 2 seconds of noise
-            sf.write(os.path.join(INPUT_DIR, f"chunk_{i:03d}.wav"), dummy.T, fs) # soundfile expects Time x Channels
+
+        # Load the geometry to ensure we generate the correct number of channels
+        try:
+            pos = load_array_geometry(GEOMETRY_FILE)
+        except Exception:
+            from simulator.acoustics.array import generate_log_spiral_array
+            pos = generate_log_spiral_array(16, 1.0)
+
+        from simulator.acoustics.channel import apply_greens_function
+
+        # Target positioned directly ahead at 10 meters
+        src_pos = np.array([10.0, 0.0, 0.0])
+
+        # Create a 4-second continuous target signal (e.g. a tone or swept sine)
+        total_sec = 4.0
+        t = np.linspace(0, total_sec, int(fs * total_sec))
+        # 1000 Hz tone + noise
+        clean_target = np.sin(2 * np.pi * 1000 * t)
+
+        # Apply physics to create the multi-channel spatial wavefront
+        multi_spatial = apply_greens_function(clean_target, fs, src_pos, pos)
+
+        # Add background noise at a low level (SNR ~ 10dB)
+        noise = np.random.randn(*multi_spatial.shape) * (np.std(multi_spatial) * 0.3)
+        mixed = multi_spatial + noise
+
+        # Slice into 2-second chunks with 1-second overlap
+        chunk_samples = 2 * fs
+        overlap_samples = 1 * fs
+        hop = chunk_samples - overlap_samples
+
+        chunk_idx = 0
+        for start in range(0, mixed.shape[1] - chunk_samples + 1, hop):
+            chunk = mixed[:, start:start+chunk_samples]
+            sf.write(os.path.join(INPUT_DIR, f"chunk_{chunk_idx:03d}.wav"), chunk.T, fs) # soundfile expects Time x Channels
+            chunk_idx += 1
 
     # Run the processor
     process_chunked_multichannel(
