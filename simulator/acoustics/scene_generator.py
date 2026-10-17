@@ -45,7 +45,9 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
     ])
 
     # Target Propagation
-    target_multi = apply_greens_function(s_t, fs, target_pos, array_positions)
+    target_multi_padded = apply_greens_function(s_t, fs, target_pos, array_positions)
+    # Target is static, so we can just crop the valid window from the start
+    target_multi = target_multi_padded[:, :n_samples]
 
     # Apply Atmospheric Turbulence
     if turbulence_sigma > 0:
@@ -97,18 +99,37 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
     x_traj = np.linspace(-interferer_speed * duration_sec / 2, interferer_speed * duration_sec / 2, n_samples)
     interferer_multi = np.zeros((n_sensors, n_samples))
 
-    # Frame-based dynamic application (approximation since exact trajectory Green's is time-varying)
-    hop_size = 512
-    for hop_idx in range(0, n_samples, hop_size):
-        end_idx = min(hop_idx + hop_size, n_samples)
-        if hop_idx >= end_idx: break
+    # Continuous time-varying fractional delay using linear interpolation
+    # This prevents the 512-sample block truncation artifacts.
+    t_idx = np.arange(n_samples)
 
-        mid_idx = (hop_idx + end_idx) // 2
-        car_pos = np.array([x_traj[mid_idx], 8.0, 0.0]) # Pass by at 8 meters
+    for m in range(n_sensors):
+        # Calculate time-varying distance from mic m to the moving car
+        dx = x_traj - array_positions[m, 0]
+        dy = 8.0 - array_positions[m, 1]
+        dz = 0.0 - array_positions[m, 2]
+        dist = np.sqrt(dx**2 + dy**2 + dz**2)
 
-        chunk = i_t[hop_idx:end_idx]
-        chunk_multi = apply_greens_function(chunk, fs, car_pos, array_positions)
-        interferer_multi[:, hop_idx:end_idx] = chunk_multi
+        # Time-varying attenuation
+        atten = 1.0 / (4 * np.pi * dist)
+
+        # Time-varying delay in samples
+        delay_samples = (dist / 343.0) * fs
+
+        # We need to look up the source signal at (t - delay)
+        lookup_idx = t_idx - delay_samples
+
+        # Linear interpolation for fractional delay
+        # Mask out indices that fall before 0
+        valid = lookup_idx >= 0
+
+        # Interpolate
+        # np.interp expects increasing x-coordinates, which lookup_idx is.
+        # But we are mapping the current time t to the source value at lookup_idx.
+        shifted_sig = np.zeros(n_samples)
+        shifted_sig[valid] = np.interp(lookup_idx[valid], t_idx, i_t)
+
+        interferer_multi[m, :] = shifted_sig * atten
 
     # Scale Main Interferer to INR
     interf_gain = calculate_snr_gain(interferer_multi[0], background_noise[0], interferer_inr)
@@ -129,7 +150,10 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
             np.sin(np.deg2rad(r_el))
         ])
 
-        r_multi = apply_greens_function(r_sig, fs, r_pos, array_positions)
+        r_multi_padded = apply_greens_function(r_sig, fs, r_pos, array_positions)
+        # Static, just take the first n_samples
+        r_multi = r_multi_padded[:, :n_samples]
+
         # Random INR between 10 and 25 dB
         r_gain = calculate_snr_gain(r_multi[0], background_noise[0], np.random.uniform(10, 25))
         r_multi *= r_gain

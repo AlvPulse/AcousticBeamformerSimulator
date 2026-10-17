@@ -24,12 +24,12 @@ def apply_greens_function(source_signal, fs, source_pos, mic_positions):
     delays_sec = distances / c
     delays_samples = delays_sec * fs
 
-    output = np.zeros((n_sensors, n_samples))
-
     # To prevent circular convolution wrap-around when shifting,
     # zero-pad to length N + max_delay
     max_delay_samples = int(np.max(delays_samples)) + 1
     padded_len = n_samples + max_delay_samples
+
+    output = np.zeros((n_sensors, padded_len))
 
     X = np.fft.rfft(source_signal, n=padded_len)
     freqs = np.fft.rfftfreq(padded_len, 1.0/fs)
@@ -38,10 +38,11 @@ def apply_greens_function(source_signal, fs, source_pos, mic_positions):
         phase_shift = np.exp(-1j * 2 * np.pi * freqs * delays_sec[m])
         X_shifted = X * phase_shift
         y_shifted = np.fft.irfft(X_shifted, n=padded_len)
-        # Truncate back to original size or just take the valid window
-        # To strictly preserve the same output size, we truncate.
-        output[m, :] = y_shifted[:n_samples] * attenuation[m]
+        output[m, :] = y_shifted * attenuation[m]
 
+    # We return the padded length so that calling functions can handle
+    # the delayed energy correctly (e.g. by overlapping with the next block)
+    # instead of blindly truncating it.
     return output
 
 def generate_diffuse_noise(mic_positions, fs, n_samples, low_freq_rumble=True):

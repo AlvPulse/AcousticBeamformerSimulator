@@ -19,7 +19,13 @@ def test_greens_function():
     src = np.array([10,0,0]) # 10 meters away on x axis
     signal = np.ones(1000)
     out = apply_greens_function(signal, fs, src, pos)
-    assert out.shape == (2, 1000)
+
+    # Check that it returns padded length to prevent circular convolution
+    delay_0 = (10.0 / 343.0) * fs
+    delay_1 = (9.0 / 343.0) * fs
+    expected_len = 1000 + int(max(delay_0, delay_1)) + 1
+
+    assert out.shape == (2, expected_len)
 
 def test_narrowband_vs_wideband_lcmv():
     from simulator.beamformers.lcmv_smi import LCMV_SMI

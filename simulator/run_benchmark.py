@@ -4,7 +4,7 @@ import numpy as np
 import librosa
 from simulator.acoustics.array import generate_log_spiral_array, load_array_geometry
 from simulator.acoustics.scene_generator import generate_scene
-from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV
+from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV, MultiRankOSP, EBB, RobustSOCP, cGMM_MVDR
 from simulator.evaluation import compute_si_sdr, compute_lsd, compute_sir, evaluate_lam_preservation, Profiler
 
 def run_benchmark():
@@ -49,7 +49,11 @@ def run_benchmark():
         "LCMV_Wideband": LCMV_SMI(fs=fs),
         "LCMV_Narrowband": NarrowbandLCMV(fs=fs, center_freq=1000.0),
         "RobustLCMV_PhaseSTOR": RobustLCMV(fs=fs, use_phase_stor=True),
-        "RobustLCMV_CMT": RobustLCMV(fs=fs, use_cmt=True)
+        "RobustLCMV_CMT": RobustLCMV(fs=fs, use_cmt=True),
+        "MultiRank_OSP": MultiRankOSP(fs=fs, rank_k=1),
+        "EBB": EBB(fs=fs, rank_s=2),
+        "RobustSOCP": RobustSOCP(fs=fs, mismatch_eps=0.1),
+        "cGMM_MVDR": cGMM_MVDR(fs=fs)
     }
 
     results = []
