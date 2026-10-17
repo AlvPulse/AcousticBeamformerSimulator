@@ -14,9 +14,6 @@ def get_yamnet_model():
     global _YAMNET_MODEL
     if _YAMNET_MODEL is None:
         try:
-            # We must set this for tfhub to work on some machines
-            import ssl
-            ssl._create_default_https_context = ssl._create_unverified_context
             import pkg_resources # Check if available, to avoid crashing earlier
             _YAMNET_MODEL = hub.load('https://tfhub.dev/google/yamnet/1')
         except Exception as e:

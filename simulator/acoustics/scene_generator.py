@@ -64,8 +64,27 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
 
     # 3. Scale Target to desired SNR
     # Measure SNR at the center mic (assume mic 0 is roughly center or use mean power)
-    target_gain = calculate_snr_gain(target_multi[0], background_noise[0], target_snr)
-    target_multi *= target_gain
+    if target_snr == "dynamic":
+        # Dynamic SNR sweep: Airplane approaching, SNR sweeps from -25 dB to +5 dB over the duration
+        snr_start = -25.0
+        snr_end = 5.0
+
+        # Calculate instantaneous gains
+        # Using a smooth linear ramp in dB space
+        db_sweep = np.linspace(snr_start, snr_end, n_samples)
+
+        # Calculate raw powers
+        p_noise = np.mean(background_noise[0]**2)
+        p_sig_raw = np.mean(target_multi[0]**2)
+
+        if p_sig_raw > 0 and p_noise > 0:
+            # Need to apply time-varying gain
+            gain_curve = np.sqrt((10**(db_sweep / 10.0) * p_noise) / p_sig_raw)
+            # Apply to all mics
+            target_multi *= gain_curve[np.newaxis, :]
+    else:
+        target_gain = calculate_snr_gain(target_multi[0], background_noise[0], target_snr)
+        target_multi *= target_gain
 
     # 4. Main Near-Field Dynamic Interferer (e.g. passing car)
     i_t = np.random.randn(n_samples) # Broadband vehicle passing sound approximation

@@ -2,9 +2,9 @@ import os
 import pandas as pd
 import numpy as np
 import librosa
-from simulator.acoustics.array import generate_log_spiral_array
+from simulator.acoustics.array import generate_log_spiral_array, load_array_geometry
 from simulator.acoustics.scene_generator import generate_scene
-from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV
+from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV
 from simulator.evaluation import compute_si_sdr, compute_lsd, compute_sir, evaluate_lam_preservation, Profiler
 
 def run_benchmark():
@@ -20,7 +20,14 @@ def run_benchmark():
         os.makedirs("data/esc50_samples", exist_ok=True)
         sf.write(esc50_sample, s, fs)
 
-    array_positions = generate_log_spiral_array(n_sensors=50, aperture_m=2.5)
+    # Load custom array geometry if available
+    geo_file = "array_geo.txt"
+    if os.path.exists(geo_file):
+        print(f"Loading custom array geometry from {geo_file}...")
+        array_positions = load_array_geometry(geo_file)
+    else:
+        print("Using default 50-mic logarithmic spiral array...")
+        array_positions = generate_log_spiral_array(n_sensors=50, aperture_m=2.5)
 
     scenarios = [
         # S1: Near-Far Power Dynamic (High INR)
@@ -33,11 +40,14 @@ def run_benchmark():
         {"id": "S6", "target_snr": -10, "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 5.0},
         # S7: Multiple Random Interferers (DoF limits)
         {"id": "S7", "target_snr": -10, "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 5, "target_look_error": 0.0},
+        # S8: Dynamic SNR Sweep (Airplane fly-by approaching)
+        {"id": "S8", "target_snr": "dynamic", "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0},
     ]
 
     beamformers = {
         "DAS": TaperedDAS(fs=fs),
-        "LCMV": LCMV_SMI(fs=fs),
+        "LCMV_Wideband": LCMV_SMI(fs=fs),
+        "LCMV_Narrowband": NarrowbandLCMV(fs=fs, center_freq=1000.0),
         "RobustLCMV_PhaseSTOR": RobustLCMV(fs=fs, use_phase_stor=True),
         "RobustLCMV_CMT": RobustLCMV(fs=fs, use_cmt=True)
     }
