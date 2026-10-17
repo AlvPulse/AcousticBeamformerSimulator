@@ -21,7 +21,7 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
                    target_az=0.0, target_el=0.0, target_dist=120.0, target_snr=-15.0,
                    interferer_inr=35.0, interferer_speed=15.0,
                    turbulence_sigma=0.0, duration_sec=3.0,
-                   num_random_interferers=1):
+                   num_random_interferers=1, cocktail_party=False):
     """
     Mixes a distant target, near-field dynamic interferer, random interferers, and noise.
     """
@@ -135,10 +135,15 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
     interf_gain = calculate_snr_gain(interferer_multi[0], background_noise[0], interferer_inr)
     interferer_multi *= interf_gain
 
-    # 5. Multiple Random Interferers (For S7)
+    # 5. Multiple Random Interferers (For S7 / S9 Cocktail Party)
     random_interferers_multi = np.zeros((n_sensors, n_samples))
     for r in range(num_random_interferers - 1): # -1 because the main dynamic car counts as 1
-        r_sig = np.random.randn(n_samples)
+        if cocktail_party:
+            # Shift target signal by random amount to create a "babble/cocktail" effect
+            shift = np.random.randint(int(fs * 0.2), int(fs * 1.5))
+            r_sig = np.roll(s_t, shift)
+        else:
+            r_sig = np.random.randn(n_samples)
 
         r_az = np.random.uniform(-180, 180)
         r_el = np.random.uniform(0, 30)

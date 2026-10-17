@@ -42,6 +42,8 @@ def run_benchmark():
         {"id": "S7", "target_snr": -10, "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 5, "target_look_error": 0.0},
         # S8: Dynamic SNR Sweep (Airplane fly-by approaching)
         {"id": "S8", "target_snr": "dynamic", "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0},
+        # S9: Cocktail Party Problem (Multiple correlated speakers/events)
+        {"id": "S9", "target_snr": -5, "interferer_inr": 10, "turbulence_sigma": 0.0, "num_rand": 4, "target_look_error": 0.0, "cocktail": True},
     ]
 
     beamformers = {
@@ -71,6 +73,7 @@ def run_benchmark():
             target_el = 0.0
 
             # Generate multi-channel scene
+            cocktail = scene_cfg.get("cocktail", False)
             mixture, tgt_multi, int_multi, noise_multi = generate_scene(
                 target_audio_path=esc50_sample,
                 array_positions=array_positions,
@@ -79,7 +82,8 @@ def run_benchmark():
                 interferer_inr=scene_cfg["interferer_inr"],
                 turbulence_sigma=scene_cfg["turbulence_sigma"],
                 duration_sec=duration_sec,
-                num_random_interferers=scene_cfg["num_rand"]
+                num_random_interferers=scene_cfg["num_rand"],
+                cocktail_party=cocktail
             )
 
             # Reference baseline is center mic (index 0)
