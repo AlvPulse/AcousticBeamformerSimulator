@@ -1,5 +1,4 @@
 import time
-import psutil
 import os
 
 class Profiler:
