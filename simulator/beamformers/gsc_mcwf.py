@@ -43,17 +43,26 @@ class GSC_MCWF(BaseBeamformer):
 
             # 3. Adaptive Interference Canceller (GSC part)
             R_uu = (u @ np.conj(u.T)) / T
-            R_uu += 1e-4 * np.trace(R_uu) * np.eye(M-1) / (M-1)
+            # Add robust diagonal loading to prevent singular matrix in silent frames
+            trace_R_uu = np.trace(R_uu)
+            load_factor = 1e-4 * trace_R_uu if trace_R_uu > 1e-10 else 1e-6
+            R_uu += load_factor * np.eye(M-1) / (M-1)
             r_uy = (u @ np.conj(y_fbf.T)) / T
 
-            w_a = np.linalg.solve(R_uu, r_uy)
-            y_gsc = y_fbf - np.conj(w_a) @ u
+            try:
+                w_a = np.linalg.solve(R_uu, r_uy)
+                y_gsc = y_fbf - np.conj(w_a) @ u
+            except np.linalg.LinAlgError:
+                # Safe fallback to fixed beamformer if adaptive step completely fails
+                y_gsc = y_fbf
 
             # 4. Multi-Channel Wiener Post-Filter (Zelinsky Estimator)
             Phi_yy = np.mean(np.abs(y_gsc)**2)
             Phi_nn = np.mean(np.abs(u)**2) # average across sensors and time
 
-            if Phi_yy > 0:
+            # Safe bounding of the Wiener gain to prevent zeroing out or blowing up
+            if Phi_yy > 1e-10:
+                # Limit the maximum suppression to -20dB (0.01) to avoid musical noise artifacts
                 H_wiener = max(0.01, 1.0 - (Phi_nn / Phi_yy))
             else:
                 H_wiener = 0.01

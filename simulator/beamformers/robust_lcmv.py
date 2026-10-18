@@ -52,12 +52,18 @@ class RobustLCMV(BaseBeamformer):
                 T_mat = self.compute_cmt_matrix(array_positions, f)
                 R = R * T_mat # Hadamard product
 
-            R_load = R + self.eps * np.trace(R) * np.eye(M) / M
+            trace_R = np.trace(R)
+            load_factor = self.eps * trace_R if trace_R > 1e-10 else 1e-6
+            R_load = R + load_factor * np.eye(M) / M
             a = self.compute_steering_vector(array_positions, f, target_az, target_el)
 
             try:
                 R_inv_a = np.linalg.solve(R_load, a)
-                w = R_inv_a / np.real(np.conj(a) @ R_inv_a)
+                denom = np.real(np.conj(a) @ R_inv_a)
+                if denom < 1e-10:
+                    w = a / M
+                else:
+                    w = R_inv_a / denom
             except np.linalg.LinAlgError:
                 w = a / M
 

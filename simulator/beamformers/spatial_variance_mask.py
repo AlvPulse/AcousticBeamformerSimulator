@@ -35,18 +35,10 @@ class SpatialVarianceMask(BaseBeamformer):
 
             a = self.compute_steering_vector(array_positions, f, target_az, target_el)
 
-            if ipd_var < self.variance_thresh:
-                # Coherent wave (target or near-field car). Safe to use adaptive LCMV.
-                R = (X_f @ np.conj(X_f.T)) / T
-                R_load = R + 1e-3 * np.trace(R) * np.eye(M) / M
-                try:
-                    R_inv_a = np.linalg.solve(R_load, a)
-                    w = R_inv_a / np.real(np.conj(a) @ R_inv_a)
-                except np.linalg.LinAlgError:
-                    w = a / M
-            else:
-                # Incoherent / Wind / Diffuse noise. Adaptive methods will self-cancel.
-                # Fall back to passive Tapered DAS.
+            # Safe NaN check in case of absolute silence
+            if np.isnan(ipd_var) or ipd_var > self.variance_thresh:
+                # Incoherent / Wind / Diffuse noise or Silent frame.
+                # Adaptive methods will self-cancel. Fall back to passive Tapered DAS.
                 taper_1d = scipy.signal.windows.chebwin(M, at=40)
                 radii = np.linalg.norm(array_positions, axis=1)
                 sort_idx = np.argsort(radii)
@@ -54,6 +46,23 @@ class SpatialVarianceMask(BaseBeamformer):
                 spatial_weights[sort_idx] = taper_1d
                 spatial_weights /= np.sum(spatial_weights)
                 w = spatial_weights * a
+            else:
+                # Coherent wave (target or near-field car). Safe to use adaptive LCMV.
+                R = (X_f @ np.conj(X_f.T)) / T
+                trace_R = np.trace(R)
+                load_factor = 1e-3 * trace_R if trace_R > 1e-10 else 1e-6
+                R_load = R + load_factor * np.eye(M) / M
+
+                try:
+                    R_inv_a = np.linalg.solve(R_load, a)
+                    denom = np.real(np.conj(a) @ R_inv_a)
+                    # Prevent divide by zero in extreme cases
+                    if denom < 1e-10:
+                        w = a / M
+                    else:
+                        w = R_inv_a / denom
+                except np.linalg.LinAlgError:
+                    w = a / M
 
             Y[f_idx, :] = np.conj(w) @ X_f
 

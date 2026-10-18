@@ -61,7 +61,8 @@ def run_benchmark():
         "cGMM_MVDR": cGMM_MVDR(fs=fs),
         "GEV": GEVBeamformer(fs=fs),
         "ILRMA": ILRMA(fs=fs),
-        "Spatial_IPD_Mask": SpatialVarianceMask(fs=fs),
+        # Tuned parameters explicitly exposed for investigation
+        "Spatial_IPD_Mask": SpatialVarianceMask(fs=fs, variance_threshold=0.5),
         "GSC_MCWF": GSC_MCWF(fs=fs)
     }
 
