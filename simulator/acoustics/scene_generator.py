@@ -21,7 +21,8 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
                    target_az=0.0, target_el=0.0, target_dist=120.0, target_snr=-15.0,
                    interferer_inr=35.0, interferer_speed=15.0,
                    turbulence_sigma=0.0, duration_sec=3.0,
-                   num_random_interferers=1, cocktail_party=False, wind_gusts=False):
+                   num_random_interferers=1, cocktail_party=False, wind_gusts=False,
+                   sensor_failure=False, moving_target=False):
     """
     Mixes a distant target, near-field dynamic interferer, random interferers, and noise.
     """
@@ -35,19 +36,48 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
     else:
         s_t = np.pad(s_t, (0, n_samples - len(s_t)))
 
-    # Calculate target Cartesian position
-    az_rad = np.deg2rad(target_az)
-    el_rad = np.deg2rad(target_el)
-    target_pos = target_dist * np.array([
-        np.cos(el_rad) * np.cos(az_rad),
-        np.cos(el_rad) * np.sin(az_rad),
-        np.sin(el_rad)
-    ])
+    if moving_target:
+        # Target moves horizontally across the field of view (e.g. from -15 deg to +15 deg)
+        # over the duration of the clip.
+        az_traj = np.linspace(target_az - 15.0, target_az + 15.0, n_samples)
+        el_rad = np.deg2rad(target_el)
+        target_multi = np.zeros((n_sensors, n_samples))
 
-    # Target Propagation
-    target_multi_padded = apply_greens_function(s_t, fs, target_pos, array_positions)
-    # Target is static, so we can just crop the valid window from the start
-    target_multi = target_multi_padded[:, :n_samples]
+        t_idx = np.arange(n_samples)
+        for m in range(n_sensors):
+            # Calculate time-varying Cartesian position
+            az_rad = np.deg2rad(az_traj)
+            x = target_dist * np.cos(el_rad) * np.cos(az_rad)
+            y = target_dist * np.cos(el_rad) * np.sin(az_rad)
+            z = target_dist * np.sin(el_rad) * np.ones_like(az_rad)
+
+            dx = x - array_positions[m, 0]
+            dy = y - array_positions[m, 1]
+            dz = z - array_positions[m, 2]
+            dist = np.sqrt(dx**2 + dy**2 + dz**2)
+
+            atten = 1.0 / (4 * np.pi * dist)
+            delay_samples = (dist / 343.0) * fs
+            lookup_idx = t_idx - delay_samples
+            valid = lookup_idx >= 0
+
+            shifted_sig = np.zeros(n_samples)
+            shifted_sig[valid] = np.interp(lookup_idx[valid], t_idx, s_t)
+            target_multi[m, :] = shifted_sig * atten
+    else:
+        # Calculate static target Cartesian position
+        az_rad = np.deg2rad(target_az)
+        el_rad = np.deg2rad(target_el)
+        target_pos = target_dist * np.array([
+            np.cos(el_rad) * np.cos(az_rad),
+            np.cos(el_rad) * np.sin(az_rad),
+            np.sin(el_rad)
+        ])
+
+        # Target Propagation
+        target_multi_padded = apply_greens_function(s_t, fs, target_pos, array_positions)
+        # Target is static, so we can just crop the valid window from the start
+        target_multi = target_multi_padded[:, :n_samples]
 
     # Apply Atmospheric Turbulence
     if turbulence_sigma > 0:
@@ -194,5 +224,18 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
 
     # Final Mixture
     mixture = target_multi + interferer_multi + random_interferers_multi + background_noise
+
+    if sensor_failure:
+        # Simulate hardware failure where 10% of the microphones randomly die (output zero)
+        # or physically clip due to buffeting.
+        fail_count = max(1, int(n_sensors * 0.1))
+        fail_idx = np.random.choice(n_sensors, fail_count, replace=False)
+        for idx in fail_idx:
+            # 50% chance to die, 50% chance to clip to max rail
+            if np.random.rand() > 0.5:
+                mixture[idx, :] = 0.0
+            else:
+                max_val = np.max(np.abs(mixture))
+                mixture[idx, :] = np.clip(mixture[idx, :] * 100, -max_val, max_val)
 
     return mixture, target_multi, interferer_multi + random_interferers_multi, background_noise

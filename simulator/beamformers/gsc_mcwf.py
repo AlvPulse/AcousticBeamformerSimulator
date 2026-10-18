@@ -43,14 +43,23 @@ class GSC_MCWF(BaseBeamformer):
 
             # 3. Adaptive Interference Canceller (GSC part)
             R_uu = (u @ np.conj(u.T)) / T
-            # Add robust diagonal loading to prevent singular matrix in silent frames
+            # Add massive diagonal loading (Robust GSC / Norm Constraint)
+            # to penalize large adaptive weights. This prevents the adaptive filter
+            # from actively cancelling the target if it leaks into the noise reference
+            # due to look-direction mismatch or moving sources.
             trace_R_uu = np.trace(R_uu)
-            load_factor = 1e-4 * trace_R_uu if trace_R_uu > 1e-10 else 1e-6
+            load_factor = 1e-2 * trace_R_uu if trace_R_uu > 1e-10 else 1e-4
             R_uu += load_factor * np.eye(M-1) / (M-1)
             r_uy = (u @ np.conj(y_fbf.T)) / T
 
             try:
                 w_a = np.linalg.solve(R_uu, r_uy)
+
+                # Hard limit on adaptive weight norm to prevent target cancellation
+                norm_w = np.linalg.norm(w_a)
+                if norm_w > 10.0:
+                    w_a = w_a * (10.0 / norm_w)
+
                 y_gsc = y_fbf - np.conj(w_a) @ u
             except np.linalg.LinAlgError:
                 # Safe fallback to fixed beamformer if adaptive step completely fails

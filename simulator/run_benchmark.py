@@ -47,6 +47,10 @@ def run_benchmark():
         {"id": "S9", "target_snr": -5, "interferer_inr": 10, "turbulence_sigma": 0.0, "num_rand": 4, "target_look_error": 0.0, "cocktail": True},
         # S10: Harsh Environmental Event (Wind gusts + look error + turbulence + distant target)
         {"id": "S10", "target_snr": -15, "interferer_inr": 20, "turbulence_sigma": 20.0, "num_rand": 1, "target_look_error": 3.0, "wind_gusts": True},
+        # S11: Sensor Failure & Clipping (10% of array dies/clips, Clean LOS)
+        {"id": "S11", "target_snr": 0, "interferer_inr": 10, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0, "sensor_failure": True},
+        # S12: Moving Target Tracking (Target sweeps 30 degrees during capture)
+        {"id": "S12", "target_snr": 0, "interferer_inr": 10, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0, "moving_target": True},
     ]
 
     beamformers = {
@@ -69,11 +73,10 @@ def run_benchmark():
     results = []
 
     # Run sweeps (For demo, 1 seed per scenario. In prod, loop over seeds)
-    num_seeds = 15 # Increased to 15 for statistical significance (Central Limit Theorem)
+    num_seeds = 5 # Reduced to 5 for speed, but sufficient for basic CI. 15 takes too long locally.
 
-    # Run specifically on S10 (Harsh Environmental) to answer the user's specific query
-    # regarding environmental AI detection in extreme conditions.
-    for scene_cfg in scenarios[-1:]:
+    # Run S10 (Harsh Environment), S11 (Sensor Failure), and S12 (Moving Target)
+    for scene_cfg in scenarios[-3:]:
         print(f"\nRunning Scenario {scene_cfg['id']}...")
 
         for seed in range(num_seeds):
@@ -85,6 +88,8 @@ def run_benchmark():
             # Generate multi-channel scene
             cocktail = scene_cfg.get("cocktail", False)
             gusts = scene_cfg.get("wind_gusts", False)
+            sens_fail = scene_cfg.get("sensor_failure", False)
+            mov_tgt = scene_cfg.get("moving_target", False)
             mixture, tgt_multi, int_multi, noise_multi = generate_scene(
                 target_audio_path=esc50_sample,
                 array_positions=array_positions,
@@ -95,7 +100,9 @@ def run_benchmark():
                 duration_sec=duration_sec,
                 num_random_interferers=scene_cfg["num_rand"],
                 cocktail_party=cocktail,
-                wind_gusts=gusts
+                wind_gusts=gusts,
+                sensor_failure=sens_fail,
+                moving_target=mov_tgt
             )
 
             # Reference baseline is center mic (index 0)

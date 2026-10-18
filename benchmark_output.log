@@ -1,24 +1,10 @@
-Loading custom array geometry from array_geo.txt...
-
-Running Scenario S10...
-
-Benchmarking Complete. Results saved to docs/benchmark_results.csv
-
-Statistically Credible Performance Summary (Mean ± 95% CI):
-                              Delta_SISDR_dB  ... Latency_ms
-Scenario Beamformer                           ...
-S10      DAS                   -20.25 ± 8.25  ...   0.287057
-         EBB                   -28.72 ± 9.88  ...   0.899818
-         GEV                   -10.90 ± 7.36  ...   1.177939
-         GSC_MCWF              -12.19 ± 9.85  ...   1.046020
-         ILRMA                 -20.25 ± 8.25  ...   0.485371
-         LCMV_Narrowband        -0.67 ± 0.22  ...   0.043677
-         LCMV_Wideband         -11.11 ± 8.91  ...   0.652992
-         MultiRank_OSP         -20.03 ± 9.26  ...   0.855288
-         RobustLCMV_CMT        -13.05 ± 9.58  ...   3.878746
-         RobustLCMV_PhaseSTOR  -24.35 ± 8.63  ...   0.612990
-         RobustSOCP            -10.15 ± 8.81  ...  49.352887
-         Spatial_IPD_Mask      -20.25 ± 8.25  ...   1.341164
-         cGMM_MVDR             -18.33 ± 9.40  ...   1.142466
-
-[13 rows x 6 columns]
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1792332124.568828  563407 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1792332126.916138  563407 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+/app/simulator/beamformers/tapered_das.py:21: UserWarning: This window is not suitable for spectral analysis for attenuation values lower than about 45dB because the equivalent noise bandwidth of a Chebyshev window does not grow monotonically with increasing sidelobe attenuation when the attenuation is smaller than about 45 dB.
+  taper_1d = scipy.signal.windows.chebwin(M, at=self.sidelobe_db)
+/app/simulator/beamformers/multirank_osp.py:24: UserWarning: This window is not suitable for spectral analysis for attenuation values lower than about 45dB because the equivalent noise bandwidth of a Chebyshev window does not grow monotonically with increasing sidelobe attenuation when the attenuation is smaller than about 45 dB.
+  taper_1d = scipy.signal.windows.chebwin(M, at=40)
+/app/simulator/beamformers/spatial_variance_mask.py:42: UserWarning: This window is not suitable for spectral analysis for attenuation values lower than about 45dB because the equivalent noise bandwidth of a Chebyshev window does not grow monotonically with increasing sidelobe attenuation when the attenuation is smaller than about 45 dB.
+  taper_1d = scipy.signal.windows.chebwin(M, at=40)
