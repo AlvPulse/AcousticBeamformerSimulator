@@ -52,3 +52,33 @@ def compute_sir(target_signal, interferer_signal, beamformer, array_positions, t
     p_int = np.mean(interferer_signal**2)
     if p_int == 0: return 100.0
     return 10 * np.log10(p_sig / (p_int + 1e-8))
+
+def compute_coherent_gain(raw_center_mic, beamformed_out, target_multi, noise_multi):
+    """
+    Computes Input SNR, Output SNR, and True Spatial Array Gain (AG = SNR_out - SNR_in)
+    to prove coherent combining vs non-coherent noise accumulation.
+    """
+    p_target_in = np.mean(target_multi[0]**2)
+    p_noise_in = np.mean(noise_multi[0]**2)
+
+    snr_in = 10 * np.log10(p_target_in / (p_noise_in + 1e-10))
+
+    # Scale invariant
+    ref = target_multi[0] - np.mean(target_multi[0])
+    est = beamformed_out - np.mean(beamformed_out)
+
+    alpha = np.sum(ref * est) / (np.sum(ref**2) + 1e-8)
+    e_target = alpha * ref
+    e_res = est - e_target
+
+    p_target_out = np.mean(e_target**2)
+    p_noise_out = np.mean(e_res**2)
+
+    snr_out = 10 * np.log10(p_target_out / (p_noise_out + 1e-10))
+    array_gain = snr_out - snr_in
+
+    return {
+        "snr_in_db": snr_in,
+        "snr_out_db": snr_out,
+        "array_gain_db": array_gain
+    }

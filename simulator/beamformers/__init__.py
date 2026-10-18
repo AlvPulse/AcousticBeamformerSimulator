@@ -7,3 +7,6 @@ from .ebb import EBB
 from .robust_socp import RobustSOCP
 from .cgmm_mvdr import cGMM_MVDR
 from .gev_beamformer import GEVBeamformer
+from .ilrma import ILRMA
+from .spatial_variance_mask import SpatialVarianceMask
+from .gsc_mcwf import GSC_MCWF

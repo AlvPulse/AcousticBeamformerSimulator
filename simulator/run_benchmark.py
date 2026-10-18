@@ -4,8 +4,9 @@ import numpy as np
 import librosa
 from simulator.acoustics.array import generate_log_spiral_array, load_array_geometry
 from simulator.acoustics.scene_generator import generate_scene
-from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV, MultiRankOSP, EBB, RobustSOCP, cGMM_MVDR, GEVBeamformer
+from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV, MultiRankOSP, EBB, RobustSOCP, cGMM_MVDR, GEVBeamformer, ILRMA, SpatialVarianceMask, GSC_MCWF
 from simulator.evaluation import compute_si_sdr, compute_lsd, compute_sir, evaluate_lam_preservation, Profiler
+from simulator.evaluation.metrics_acoustic import compute_coherent_gain
 
 def run_benchmark():
     # Setup
@@ -58,7 +59,10 @@ def run_benchmark():
         "EBB": EBB(fs=fs, rank_s=2),
         "RobustSOCP": RobustSOCP(fs=fs, mismatch_eps=0.1),
         "cGMM_MVDR": cGMM_MVDR(fs=fs),
-        "GEV": GEVBeamformer(fs=fs)
+        "GEV": GEVBeamformer(fs=fs),
+        "ILRMA": ILRMA(fs=fs),
+        "Spatial_IPD_Mask": SpatialVarianceMask(fs=fs),
+        "GSC_MCWF": GSC_MCWF(fs=fs)
     }
 
     results = []
@@ -116,6 +120,9 @@ def run_benchmark():
 
                 lsd = compute_lsd(clean_tgt, y_out)
 
+                # Coherent Combining Metrics
+                coh_stats = compute_coherent_gain(center_mic, y_out, tgt_multi, int_multi + noise_multi)
+
                 # LAM feature integrity
                 lam_stats = evaluate_lam_preservation(clean_tgt, y_out, fs)
 
@@ -131,10 +138,12 @@ def run_benchmark():
                     "Seed": seed,
                     "Beamformer": name,
                     "Delta_SISDR_dB": delta_sisdr,
+                    "Array_Gain_dB": coh_stats["array_gain_db"],
                     "LSD": lsd,
                     "LAM_CosineSim": lam_stats["embedding_similarity"],
                     "LAM_Top1Match": lam_stats["top1_match"],
-                    "RTF": perf["rtf"]
+                    "RTF": perf["rtf"],
+                    "Latency_ms": perf["latency_ms"]
                 }
                 results.append(res)
 
@@ -154,9 +163,11 @@ def run_benchmark():
 
     summary = df.groupby(["Scenario", "Beamformer"]).agg({
         "Delta_SISDR_dB": mean_ci,
+            "Array_Gain_dB": mean_ci,
         "LSD": mean_ci,
         "LAM_CosineSim": mean_ci,
-        "RTF": "mean"
+            "RTF": "mean",
+            "Latency_ms": "mean"
     })
 
     print("\nStatistically Credible Performance Summary (Mean ± 95% CI):")
