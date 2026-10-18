@@ -21,7 +21,7 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
                    target_az=0.0, target_el=0.0, target_dist=120.0, target_snr=-15.0,
                    interferer_inr=35.0, interferer_speed=15.0,
                    turbulence_sigma=0.0, duration_sec=3.0,
-                   num_random_interferers=1, cocktail_party=False):
+                   num_random_interferers=1, cocktail_party=False, wind_gusts=False):
     """
     Mixes a distant target, near-field dynamic interferer, random interferers, and noise.
     """
@@ -63,6 +63,34 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
     # Combine noise (50% thermal, 50% diffuse power)
     background_noise = thermal_noise + diffuse_noise
     background_noise /= np.std(background_noise) # Unit variance
+
+    # Add severe Wind Gusts if requested
+    # Wind gusts are loud, transient, low-frequency pressure spikes that hit microphones independently
+    if wind_gusts:
+        for m in range(n_sensors):
+            # Create a 1/f noise burst
+            gust_noise = np.random.randn(n_samples)
+            b, a = scipy.signal.butter(2, 50/(fs/2), btype='low') # Very low frequency rumble
+            gust_noise = scipy.signal.lfilter(b, a, gust_noise)
+
+            # Apply a harsh envelope (transient spike)
+            env = np.zeros(n_samples)
+            # 2 random gusts per microphone
+            for _ in range(2):
+                start = np.random.randint(0, int(n_samples * 0.8))
+                length = np.random.randint(int(fs * 0.2), int(fs * 0.8))
+
+                # Make sure we don't go out of bounds
+                actual_length = min(length, n_samples - start)
+                if actual_length <= 0: continue
+
+                window = scipy.signal.windows.hann(actual_length)
+                env[start:start+actual_length] += window
+
+            gust_noise *= env
+            # Gusts are extremely loud (+40 dB relative to background noise)
+            gust_gain = calculate_snr_gain(gust_noise, background_noise[0], 40.0)
+            background_noise[m] += gust_noise * gust_gain
 
     # 3. Scale Target to desired SNR
     # Measure SNR at the center mic (assume mic 0 is roughly center or use mean power)

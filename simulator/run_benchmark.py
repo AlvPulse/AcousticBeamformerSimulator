@@ -44,6 +44,8 @@ def run_benchmark():
         {"id": "S8", "target_snr": "dynamic", "interferer_inr": 20, "turbulence_sigma": 0.0, "num_rand": 1, "target_look_error": 0.0},
         # S9: Cocktail Party Problem (Multiple correlated speakers/events)
         {"id": "S9", "target_snr": -5, "interferer_inr": 10, "turbulence_sigma": 0.0, "num_rand": 4, "target_look_error": 0.0, "cocktail": True},
+        # S10: Harsh Environmental Event (Wind gusts + look error + turbulence + distant target)
+        {"id": "S10", "target_snr": -15, "interferer_inr": 20, "turbulence_sigma": 20.0, "num_rand": 1, "target_look_error": 3.0, "wind_gusts": True},
     ]
 
     beamformers = {
@@ -74,6 +76,7 @@ def run_benchmark():
 
             # Generate multi-channel scene
             cocktail = scene_cfg.get("cocktail", False)
+            gusts = scene_cfg.get("wind_gusts", False)
             mixture, tgt_multi, int_multi, noise_multi = generate_scene(
                 target_audio_path=esc50_sample,
                 array_positions=array_positions,
@@ -83,7 +86,8 @@ def run_benchmark():
                 turbulence_sigma=scene_cfg["turbulence_sigma"],
                 duration_sec=duration_sec,
                 num_random_interferers=scene_cfg["num_rand"],
-                cocktail_party=cocktail
+                cocktail_party=cocktail,
+                wind_gusts=gusts
             )
 
             # Reference baseline is center mic (index 0)
@@ -112,10 +116,10 @@ def run_benchmark():
                 # LAM feature integrity
                 lam_stats = evaluate_lam_preservation(clean_tgt, y_out, fs)
 
-                # Export audio stream
-                out_audio_dir = "docs/audio_outputs"
+                # Export audio stream into distinct folders per method
+                out_audio_dir = f"docs/audio_outputs/{name}"
                 os.makedirs(out_audio_dir, exist_ok=True)
-                audio_filename = f"{out_audio_dir}/{scene_cfg['id']}_seed{seed}_{name}.wav"
+                audio_filename = f"{out_audio_dir}/{scene_cfg['id']}_seed{seed}.wav"
                 import soundfile as sf
                 sf.write(audio_filename, y_out, fs)
 
