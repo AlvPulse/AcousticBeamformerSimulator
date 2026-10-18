@@ -4,7 +4,7 @@ import numpy as np
 import librosa
 from simulator.acoustics.array import generate_log_spiral_array, load_array_geometry
 from simulator.acoustics.scene_generator import generate_scene
-from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV, MultiRankOSP, EBB, RobustSOCP, cGMM_MVDR
+from simulator.beamformers import TaperedDAS, LCMV_SMI, RobustLCMV, NarrowbandLCMV, MultiRankOSP, EBB, RobustSOCP, cGMM_MVDR, GEVBeamformer
 from simulator.evaluation import compute_si_sdr, compute_lsd, compute_sir, evaluate_lam_preservation, Profiler
 
 def run_benchmark():
@@ -57,15 +57,18 @@ def run_benchmark():
         "MultiRank_OSP": MultiRankOSP(fs=fs, rank_k=1),
         "EBB": EBB(fs=fs, rank_s=2),
         "RobustSOCP": RobustSOCP(fs=fs, mismatch_eps=0.1),
-        "cGMM_MVDR": cGMM_MVDR(fs=fs)
+        "cGMM_MVDR": cGMM_MVDR(fs=fs),
+        "GEV": GEVBeamformer(fs=fs)
     }
 
     results = []
 
     # Run sweeps (For demo, 1 seed per scenario. In prod, loop over seeds)
-    num_seeds = 2 # Keeping it small for local execution speed
+    num_seeds = 15 # Increased to 15 for statistical significance (Central Limit Theorem)
 
-    for scene_cfg in scenarios:
+    # Run specifically on S10 (Harsh Environmental) to answer the user's specific query
+    # regarding environmental AI detection in extreme conditions.
+    for scene_cfg in scenarios[-1:]:
         print(f"\nRunning Scenario {scene_cfg['id']}...")
 
         for seed in range(num_seeds):
@@ -142,10 +145,25 @@ def run_benchmark():
     df.to_csv(csv_path, index=False)
     print(f"\nBenchmarking Complete. Results saved to {csv_path}")
 
-    # Print summary
-    summary = df.groupby(["Scenario", "Beamformer"]).mean(numeric_only=True)
-    print("\nMean Performance Summary:")
-    print(summary[["Delta_SISDR_dB", "LSD", "LAM_CosineSim", "LAM_Top1Match", "RTF"]])
+    # Calculate 95% Confidence Intervals
+    # CI = 1.96 * (std / sqrt(n))
+    def mean_ci(x):
+        m = np.mean(x)
+        ci = 1.96 * (np.std(x) / np.sqrt(len(x)))
+        return f"{m:.2f} ± {ci:.2f}"
+
+    summary = df.groupby(["Scenario", "Beamformer"]).agg({
+        "Delta_SISDR_dB": mean_ci,
+        "LSD": mean_ci,
+        "LAM_CosineSim": mean_ci,
+        "RTF": "mean"
+    })
+
+    print("\nStatistically Credible Performance Summary (Mean ± 95% CI):")
+    print(summary)
+
+    # Save the aggregated CI summary as well
+    summary.to_csv("docs/benchmark_summary_with_CI.csv")
 
 if __name__ == "__main__":
     run_benchmark()

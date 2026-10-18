@@ -6,3 +6,4 @@ from .multirank_osp import MultiRankOSP
 from .ebb import EBB
 from .robust_socp import RobustSOCP
 from .cgmm_mvdr import cGMM_MVDR
+from .gev_beamformer import GEVBeamformer
