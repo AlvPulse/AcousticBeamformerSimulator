@@ -17,12 +17,15 @@ def calculate_snr_gain(signal, noise, target_snr_db):
     gain = np.sqrt((snr_linear * p_noise) / p_sig)
     return gain
 
+from simulator.acoustics.spl_calibration import calibrate_signal_spl
+
 def generate_scene(target_audio_path, array_positions, fs=16000,
                    target_az=0.0, target_el=0.0, target_dist=120.0, target_snr=-15.0,
                    interferer_inr=35.0, interferer_speed=15.0,
                    turbulence_sigma=0.0, duration_sec=3.0,
                    num_random_interferers=1, cocktail_party=False, wind_gusts=False,
-                   sensor_failure=False, moving_target=False):
+                   sensor_failure=False, moving_target=False,
+                   physics_spl_mode=False, target_spl_1m=100.0, noise_spl=50.0):
     """
     Mixes a distant target, near-field dynamic interferer, random interferers, and noise.
     """
@@ -35,6 +38,11 @@ def generate_scene(target_audio_path, array_positions, fs=16000,
         s_t = s_t[:n_samples]
     else:
         s_t = np.pad(s_t, (0, n_samples - len(s_t)))
+
+    # 1.5 SPL Calibration (If using strict physics mode)
+    if physics_spl_mode:
+        # Calibrate source signal so it emits target_spl_1m at 1 meter
+        s_t = calibrate_signal_spl(s_t, target_spl_1m)
 
     if moving_target:
         # Target moves horizontally across the field of view (e.g. from -15 deg to +15 deg)
