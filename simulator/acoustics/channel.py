@@ -3,7 +3,49 @@ import scipy.special as sp
 
 c = 343.0 # Speed of sound (m/s)
 
-def apply_greens_function(source_signal, fs, source_pos, mic_positions):
+def calculate_iso_9613_alpha(f, temp_c=20.0, humidity_pct=50.0, p_atm=101.325):
+    """
+    Calculates atmospheric attenuation coefficient alpha (dB/m) according to ISO 9613-1.
+    f: Frequency array in Hz.
+    Returns: alpha in linear scale (multiplicative attenuation factor per meter).
+    """
+    # Prevent divide by zero for f=0
+    f = np.maximum(f, 1e-10)
+
+    # Reference atmospheric pressure (kPa)
+    pr = 101.325
+    pa = p_atm
+
+    # Absolute temperature (K)
+    T = temp_c + 273.15
+    T01 = 293.15
+
+    # Saturation vapor pressure
+    C = -6.8346 * (T01 / T)**1.261 + 4.6151
+    psat = pr * 10**C
+
+    # Molar concentration of water vapor (%)
+    h = humidity_pct * (psat / pa)
+
+    # Relaxation frequencies for Oxygen and Nitrogen (Hz)
+    frO = (pa / pr) * (24 + 4.04e4 * h * (0.02 + h) / (0.391 + h))
+    frN = (pa / pr) * np.sqrt(T / T01) * (9 + 280 * h * np.exp(-4.170 * ((T / T01)**(-1/3) - 1)))
+
+    # Attenuation coefficient alpha (dB / m)
+    # Note: Formula from ISO 9613-1 gives dB/km, we divide by 1000 for dB/m
+    alpha_db_km = 8.686 * f**2 * (
+        (1.84e-11 * (pa/pr)**-1 * np.sqrt(T/T01)) +
+        ((T/T01)**-2.5 * (0.01275 * np.exp(-2239.1 / T) * (frO / (frO**2 + f**2)) +
+                          0.1068 * np.exp(-3352.0 / T) * (frN / (frN**2 + f**2))))
+    )
+    alpha_db_m = alpha_db_km / 1000.0
+
+    # Convert dB/m to a linear multiplier per meter
+    # dB = 20 * log10(A), so A = 10^(dB/20). Since it's attenuation, it's negative dB.
+    alpha_linear = 10 ** (-alpha_db_m / 20.0)
+    return alpha_linear
+
+def apply_greens_function(source_signal, fs, source_pos, mic_positions, apply_iso=True):
     """
     Applies exact spherical wave Green's function for near-field attenuation and delay.
     source_signal: (n_samples,)
@@ -37,7 +79,15 @@ def apply_greens_function(source_signal, fs, source_pos, mic_positions):
     for m in range(n_sensors):
         phase_shift = np.exp(-1j * 2 * np.pi * freqs * delays_sec[m])
         X_shifted = X * phase_shift
+
+        # Apply ISO 9613-1 atmospheric absorption filter if requested
+        if apply_iso:
+            iso_alpha = calculate_iso_9613_alpha(freqs)
+            # Alpha is per meter. Total atmospheric attenuation is alpha^dist
+            X_shifted = X_shifted * (iso_alpha ** distances[m])
+
         y_shifted = np.fft.irfft(X_shifted, n=padded_len)
+        # Apply 1/R spherical spreading attenuation
         output[m, :] = y_shifted * attenuation[m]
 
     # We return the padded length so that calling functions can handle
