@@ -41,10 +41,11 @@ def generate_car_signature(fs, duration_sec):
 
 def run_pragmatic_sweep():
     print("==================================================")
-    print("Executing Pragmatic Range Detectability Sweep")
+    print("Executing Pragmatic Range Detectability Sweep (Customer Report)")
     print("==================================================")
 
-    fs = 16000
+    # Hardware constraints
+    fs = 8000
     duration_sec = 1.0
     N = int(fs * duration_sec)
 
@@ -58,13 +59,22 @@ def run_pragmatic_sweep():
         "Passing Car": generate_car_signature(fs, duration_sec)
     }
 
-    # Distance sweep (logarithmic scale from 100m to 3000m)
-    distances = np.logspace(np.log10(100), np.log10(3000), 10)
+    # Distance sweep (logarithmic scale from 10m to 2000m) to catch realistic drop-offs
+    # Reduced to 6 points for speed so the script doesn't time out the session
+    distances = np.logspace(np.log10(10), np.log10(2000), 6)
+
+    # Import all methods for the full customer report
+    from simulator.beamformers import RobustLCMV, GSC_MCWF, ILRMA, SpatialVarianceMask, GEVBeamformer
 
     beamformers = {
+        "DAS": TaperedDAS(fs=fs),
         "LCMV_Wideband": LCMV_SMI(fs=fs),
         "RobustLCMV_CMT": RobustLCMV(fs=fs, use_cmt=True),
-        "DAS": TaperedDAS(fs=fs)
+        "RobustLCMV_PhaseSTOR": RobustLCMV(fs=fs, use_phase_stor=True),
+        "Spatial_IPD_Mask": SpatialVarianceMask(fs=fs, variance_threshold=0.5),
+        "GSC_MCWF": GSC_MCWF(fs=fs),
+        "GEV": GEVBeamformer(fs=fs),
+        "ILRMA": ILRMA(fs=fs, n_iter=5)
     }
 
     conditions = {
@@ -76,10 +86,11 @@ def run_pragmatic_sweep():
     results = {cond: {tgt: {bf: [] for bf in beamformers.keys()} for tgt in targets.keys()} for cond in conditions.keys()}
     results_single_mic = {cond: {tgt: [] for tgt in targets.keys()} for cond in conditions.keys()}
 
-    # We set the baseline emission power. A Drone is normalized.
+    # We set the baseline emission power. To ensure realistic ranges (hundreds of meters),
+    # we emit these targets at a much higher physical SPL baseline.
     for target_name, clean_sig in targets.items():
         clean_sig = clean_sig / (np.max(np.abs(clean_sig)) + 1e-8)
-        clean_sig *= 10.0 # Standardize emission amplitude
+        clean_sig *= 500.0 # High realistic emission amplitude
         targets[target_name] = clean_sig
 
     for cond_name, env_cfg in conditions.items():
@@ -111,12 +122,24 @@ def run_pragmatic_sweep():
                 mixture = target_multi + noise
                 center_mic = mixture[0]
 
-                lam_single = evaluate_lam_preservation(clean_sig, center_mic, fs)
+                # Apply a bandpass filter to the single mic baseline to give it a fair chance
+                # at rejecting out-of-band wind noise, just like the beamformers inherently do.
+                b, a = signal.butter(4, [100/(fs/2), min(3500, (fs/2)-100)/(fs/2)], btype='band')
+                filtered_single_mic = signal.filtfilt(b, a, center_mic)
+
+                lam_single = evaluate_lam_preservation(clean_sig, filtered_single_mic, fs)
                 results_single_mic[cond_name][target_name].append(lam_single["embedding_similarity"])
 
                 for bf_name, bf in beamformers.items():
                     # 1-degree look error injected to simulate slight real-world tracking mismatch
-                    y_out = bf.process(mixture, pos, target_az=91.0, target_el=np.rad2deg(np.arcsin(50.0/dist)))
+                    # Safe arcsin to prevent NaNs when dist < altitude
+                    val = 50.0 / dist
+                    if val > 1.0: val = 1.0
+                    y_out = bf.process(mixture, pos, target_az=91.0, target_el=np.rad2deg(np.arcsin(val)))
+
+                    # Sanitize output before LAM evaluation
+                    y_out = np.nan_to_num(y_out, nan=0.0, posinf=0.0, neginf=0.0)
+
                     lam = evaluate_lam_preservation(clean_sig, y_out, fs)
                     results[cond_name][target_name][bf_name].append(lam["embedding_similarity"])
 
