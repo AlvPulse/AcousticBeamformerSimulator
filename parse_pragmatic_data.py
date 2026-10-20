@@ -1,6 +1,10 @@
-import pandas as pd
-import numpy as np
+import re
 
-# We'll re-run the core logic of the script quickly but just print the data
-# instead of plotting to answer the user's question directly with numbers.
-# To save time, we will just read the results from a modified execution
+def extract_limits():
+    with open('docs/customer_range_report.txt', 'r') as f:
+        content = f.read()
+
+    print(content[-2000:])
+
+if __name__ == '__main__':
+    extract_limits()

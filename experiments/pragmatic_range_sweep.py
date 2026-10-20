@@ -60,8 +60,9 @@ def run_pragmatic_sweep():
     }
 
     # Distance sweep (logarithmic scale from 10m to 2000m) to catch realistic drop-offs
-    # Reduced to 6 points for speed so the script doesn't time out the session
-    distances = np.logspace(np.log10(10), np.log10(2000), 6)
+    # Reduced slightly to 8 points to prevent session timeouts while still catching the
+    # crucial intermediate drop-off limits.
+    distances = np.logspace(np.log10(10), np.log10(2000), 8)
 
     # Import all methods for the full customer report
     from simulator.beamformers import RobustLCMV, GSC_MCWF, ILRMA, SpatialVarianceMask, GEVBeamformer
