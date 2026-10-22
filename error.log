@@ -1,8 +1,0 @@
-WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-I0000 00:00:1792496522.642703  894841 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
-WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
-I0000 00:00:1792496524.938828  894841 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
-/app/simulator/beamformers/tapered_das.py:21: UserWarning: This window is not suitable for spectral analysis for attenuation values lower than about 45dB because the equivalent noise bandwidth of a Chebyshev window does not grow monotonically with increasing sidelobe attenuation when the attenuation is smaller than about 45 dB.
-  taper_1d = scipy.signal.windows.chebwin(M, at=self.sidelobe_db)
-/app/simulator/beamformers/spatial_variance_mask.py:42: UserWarning: This window is not suitable for spectral analysis for attenuation values lower than about 45dB because the equivalent noise bandwidth of a Chebyshev window does not grow monotonically with increasing sidelobe attenuation when the attenuation is smaller than about 45 dB.
-  taper_1d = scipy.signal.windows.chebwin(M, at=40)
