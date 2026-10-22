@@ -11,15 +11,18 @@ import argparse
 sys.path.append('.')
 from acoustic_sim.dsp_array import ArrayGeometry
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 try:
     import tensorflow as tf
     import tensorflow_hub as hub
+    tf.config.set_visible_devices([], 'GPU')
     yamnet_model_handle = 'https://tfhub.dev/google/yamnet/1'
     yamnet_model = hub.load(yamnet_model_handle)
     YAMNET_AVAILABLE = True
-except ImportError:
+except Exception as e:
     YAMNET_AVAILABLE = False
-    print("Warning: TensorFlow or TensorFlow Hub not found. LAM detectability will be disabled.")
+    print(f"Warning: LAM detectability disabled. Error loading TensorFlow/Hub: {e}")
 
 
 def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs):
@@ -80,10 +83,19 @@ def main(args):
     M = len(pos.x)
     grid = generate_uniform_grid(args.grid_points)
 
+    from acoustic_sim.beamformer import delay_and_sum
+
     beamformers = {
         "DAS": "DAS",
+        "Tapered_DAS": "Tapered_DAS",
         "LCMV": "LCMV",
-        "RobustLCMV": "RobustLCMV"
+        "RobustLCMV": "RobustLCMV",
+        "cGMM_MVDR": "cGMM_MVDR",
+        "RobustSOCP": "RobustSOCP",
+        "EBB": "EBB",
+        "MultiRank_OSP": "MultiRank_OSP",
+        "GSC_MCWF": "GSC_MCWF",
+        "Spatial_IPD_Mask": "Spatial_IPD_Mask"
     }
 
     if args.single_smoke_test:
