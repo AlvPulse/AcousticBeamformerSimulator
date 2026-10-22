@@ -1,8 +1,9 @@
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-.env
-venv/
-env/
-.pytest_cache/
+*.wav
+*.png
+data/
+docs/audio_outputs/
+docs/figures/
+docs/real_world_outputs/
+docs/spatial_scan_outputs/
