@@ -14,6 +14,9 @@ from simulator.beamformers.multirank_osp import MultiRankOSP
 from simulator.beamformers.ebb import EBB
 from simulator.beamformers.robust_socp import RobustSOCP
 from simulator.beamformers.cgmm_mvdr import cGMM_MVDR
+from simulator.beamformers.das import StandardDAS
+from simulator.beamformers.robust_lcmv import RobustLCMV
+from simulator.beamformers.gsc_mcwf import GSC_MCWF
 
 from simulator.evaluation.metrics_acoustic import compute_si_sdr, compute_lsd, compute_array_gain
 from simulator.evaluation.metrics_lam import compute_clap_similarity
@@ -42,12 +45,15 @@ def run_scenario(scenario_id, target_snr, interferer_inr, sigma_phi, n_trials=5,
     pos_mics = get_array_geometry()
 
     beamformers = {
+        "Standard DAS": StandardDAS(pos_mics, FS),
         "DAS (Cheby)": TaperedDAS(pos_mics, FS),
         "DL-LCMV": LCMVSMI(pos_mics, FS),
+        "Robust LCMV": RobustLCMV(pos_mics, FS),
         "MultiRank OSP": MultiRankOSP(pos_mics, FS),
         "EBB": EBB(pos_mics, FS),
         "SOCP": RobustSOCP(pos_mics, FS),
-        "cGMM-MVDR": cGMM_MVDR(pos_mics, FS)
+        "cGMM-MVDR": cGMM_MVDR(pos_mics, FS),
+        "GSC-MCWF": GSC_MCWF(pos_mics, FS)
     }
 
     profiler = Profiler(FS)
