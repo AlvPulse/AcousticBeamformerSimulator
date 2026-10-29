@@ -14,15 +14,12 @@ from acoustic_sim.dsp_array import ArrayGeometry
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 try:
-    import tensorflow as tf
-    import tensorflow_hub as hub
-    tf.config.set_visible_devices([], 'GPU')
-    yamnet_model_handle = 'https://tfhub.dev/google/yamnet/1'
-    yamnet_model = hub.load(yamnet_model_handle)
-    YAMNET_AVAILABLE = True
+    from transformers import pipeline
+    ast_pipeline = pipeline('audio-classification', model='MIT/ast-finetuned-audioset-10-10-0.4593')
+    LAM_AVAILABLE = True
 except Exception as e:
-    YAMNET_AVAILABLE = False
-    print(f"Warning: LAM detectability disabled. Error loading TensorFlow/Hub: {e}")
+    LAM_AVAILABLE = False
+    print(f"Warning: LAM detectability disabled. Error loading Transformers Audio Spectrogram Transformer: {e}")
 
 
 def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs):
@@ -37,13 +34,22 @@ def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs)
         return 0.0
 
 def get_lam_detectability(audio_1d, fs):
-    if not YAMNET_AVAILABLE: return 0.0
+    if not LAM_AVAILABLE: return 0.0
     import librosa
     if fs != 16000:
         audio_1d = librosa.resample(audio_1d, orig_sr=fs, target_sr=16000)
     audio_1d = np.squeeze(audio_1d)
-    scores, embeddings, spectrogram = yamnet_model(audio_1d)
-    return float(np.max(scores))
+
+    # We want to measure the highest confidence of any event being detected
+    # Pipeline returns a list of dicts: [{'score': 0.9, 'label': 'Speech'}, ...]
+    try:
+        results = ast_pipeline({"raw": audio_1d, "sampling_rate": 16000})
+        if results and len(results) > 0:
+            return float(results[0]['score'])
+    except Exception as e:
+        print(f"LAM Error: {e}")
+
+    return 0.0
 
 def generate_uniform_grid(n_points):
     side = int(np.sqrt(n_points))

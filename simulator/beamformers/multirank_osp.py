@@ -3,7 +3,7 @@ import scipy.signal.windows as windows
 from simulator.beamformers.base import BaseBeamformer
 
 class MultiRankOSP(BaseBeamformer):
-    def __init__(self, pos_mics, fs, n_fft=512, hop_length=256, sidelobe_att_db=40):
+    def __init__(self, pos_mics, fs, n_fft=512, hop_length=256, sidelobe_att_db=50):
         super().__init__(pos_mics, fs, n_fft, hop_length)
         self.spatial_window = windows.chebwin(self.n_mics, at=sidelobe_att_db)
         self.spatial_window /= np.sum(self.spatial_window)
