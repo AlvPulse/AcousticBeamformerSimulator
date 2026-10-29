@@ -28,37 +28,13 @@ except Exception as e:
 def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs):
     from acoustic_sim.beamformer import compute_phase_stor
 
-    # We will build a small mock grid around the target to compute STOR, as STOR
-    # is the ratio of steered power vs omnidirectional/median power.
-    # To save time in the sweep, we just check if Phase-STOR is high at this specific target.
-
-    # In a real scanner, Phase STOR creates a full map. Here we just compute the single angle map
-    # against a minimal grid to get the ratio.
-    grid_az = np.linspace(-180, 180, 8)
-    grid_el = np.linspace(0, 90, 4)
-
+    # Compute phase_stor for the specific target location
     try:
-        p_map = compute_phase_stor(audio_multichannel, pos, fs, grid_az, grid_el)
-        # We don't have the exact index, so we just return the max phase stor found
-        return float(np.max(p_map))
+        p_stor = compute_phase_stor(audio_multichannel, pos, fs, target_az, target_el)
+        return float(p_stor)
     except Exception as e:
-        # Fallback if compute_phase_stor is not available or fails
-        f, t, Zxx = signal.stft(audio_multichannel, fs=fs, nperseg=512)
-        idx_f = np.where((f > 100) & (f < 8000))[0]
-        if len(idx_f) == 0: return 0.0
-
-        phat_val = 0.0
-        for i, freq_idx in enumerate(idx_f):
-            X = Zxx[:, freq_idx, :]
-            mag = np.abs(X) + 1e-12
-            X_phat = X / mag
-
-            # Simple SRP-PHAT steering delay approximation
-            # Since we don't have the full object here easily, we just use a basic sum
-            # Note: This is an approximation for the script
-            phat_val += np.sum(np.abs(X_phat))
-
-        return phat_val / len(idx_f)
+        print(f"Phase stor error: {e}")
+        return 0.0
 
 def get_lam_detectability(audio_1d, fs):
     if not YAMNET_AVAILABLE: return 0.0
@@ -79,24 +55,41 @@ def generate_uniform_grid(n_points):
 
 def main(args):
     fs = 16000
-    pos = ArrayGeometry(np.zeros(50), np.zeros(50))
+
+    # Load array geometry correctly
+    try:
+        from acoustic_sim.dsp_array import load_array
+        pos = load_array(args.geo_file)
+    except Exception as e:
+        print(f"Error loading {args.geo_file}, falling back to default: {e}")
+        pos = ArrayGeometry(np.zeros(50), np.zeros(50))
+
     M = len(pos.x)
     grid = generate_uniform_grid(args.grid_points)
 
-    from acoustic_sim.beamformer import delay_and_sum
+    # Array for beamformers expects (M, 3)
+    pos_3d = np.stack([pos.x, pos.y, np.zeros_like(pos.x)], axis=1)
 
-
+    from simulator.beamformers.das import StandardDAS
+    from simulator.beamformers.tapered_das import TaperedDAS
+    from simulator.beamformers.lcmv_smi import LCMVSMI
+    from simulator.beamformers.robust_lcmv import RobustLCMV
+    from simulator.beamformers.cgmm_mvdr import cGMM_MVDR
+    from simulator.beamformers.robust_socp import RobustSOCP
+    from simulator.beamformers.ebb import EBB
+    from simulator.beamformers.multirank_osp import MultiRankOSP
+    from simulator.beamformers.gsc_mcwf import GSC_MCWF
 
     beamformers = {
-        "DAS": "DAS",
-        "Tapered_DAS": "Tapered_DAS",
-        "LCMV": "LCMV",
-        "RobustLCMV": "RobustLCMV",
-        "cGMM_MVDR": "cGMM_MVDR",
-        "RobustSOCP": "RobustSOCP",
-        "EBB": "EBB",
-        "MultiRank_OSP": "MultiRank_OSP",
-        "GSC_MCWF": "GSC_MCWF"
+        "DAS": StandardDAS(pos_3d, fs),
+        "Tapered_DAS": TaperedDAS(pos_3d, fs),
+        "LCMV": LCMVSMI(pos_3d, fs),
+        "RobustLCMV": RobustLCMV(pos_3d, fs),
+        "cGMM_MVDR": cGMM_MVDR(pos_3d, fs),
+        "RobustSOCP": RobustSOCP(pos_3d, fs),
+        "EBB": EBB(pos_3d, fs),
+        "MultiRank_OSP": MultiRankOSP(pos_3d, fs),
+        "GSC_MCWF": GSC_MCWF(pos_3d, fs)
     }
     if args.single_smoke_test:
         print("Running Single File Smoke Test with KNOWN Ground Truth Angle & Severe Environment...")
@@ -135,11 +128,34 @@ def main(args):
 
             for bf_name, bf in beamformers.items():
                 energy_map, lam_map, phase_stor_map = [], [], []
+                out_dir = os.path.join(args.output, test_name, chunk_name)
+                os.makedirs(out_dir, exist_ok=True)
+                audio_out_dir = os.path.join(out_dir, bf_name)
+                os.makedirs(audio_out_dir, exist_ok=True)
+
                 for az, el in grid:
-                    y_out = np.random.randn(fs)
-                    p_out = np.mean(y_out**2)
-                    p_stor = compute_phase_stor_metric(audio, pos, az, el, fs)
-                    lam_score = get_lam_detectability(y_out, fs)
+                    # Convert steering az/el to cartesian look_pos vector
+                    # For simplicity, assuming far-field steering vector needs a unit vector
+                    look_pos = np.array([
+                        np.cos(np.radians(el)) * np.cos(np.radians(az)),
+                        np.cos(np.radians(el)) * np.sin(np.radians(az)),
+                        np.sin(np.radians(el))
+                    ]) * 120.0 # 120m Far field distance
+
+                    try:
+                        y_out = bf.process(audio, look_pos)
+                        p_out = np.mean(y_out**2)
+                        p_stor = compute_phase_stor_metric(audio, pos, az, el, fs)
+                        lam_score = get_lam_detectability(y_out, fs)
+
+                        # Save the audio for the user to hear
+                        sf.write(os.path.join(audio_out_dir, f"audio_az{int(az)}_el{int(el)}.wav"), y_out, fs)
+                    except Exception as e:
+                        print(f"Error processing {bf_name} at az={az}, el={el}: {e}")
+                        y_out = np.zeros(audio.shape[1])
+                        p_out = 0.0
+                        p_stor = 0.0
+                        lam_score = 0.0
 
                     all_results.append({
                         "Folder": test_name, "Chunk": chunk_name, "Algorithm": bf_name,
@@ -151,8 +167,6 @@ def main(args):
                     phase_stor_map.append(p_stor)
 
                 if len(grid) > 1:
-                    out_dir = os.path.join(args.output, test_name, chunk_name)
-                    os.makedirs(out_dir, exist_ok=True)
                     azs, els = [p[0] for p in grid], [p[1] for p in grid]
                     fig, axs = plt.subplots(1, 3, figsize=(18, 5))
                     sc0 = axs[0].scatter(azs, els, c=energy_map, cmap='magma', s=100)
