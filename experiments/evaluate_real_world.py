@@ -85,6 +85,8 @@ def main(args):
 
     from acoustic_sim.beamformer import delay_and_sum
 
+
+
     beamformers = {
         "DAS": "DAS",
         "Tapered_DAS": "Tapered_DAS",
@@ -94,10 +96,8 @@ def main(args):
         "RobustSOCP": "RobustSOCP",
         "EBB": "EBB",
         "MultiRank_OSP": "MultiRank_OSP",
-        "GSC_MCWF": "GSC_MCWF",
-        "Spatial_IPD_Mask": "Spatial_IPD_Mask"
+        "GSC_MCWF": "GSC_MCWF"
     }
-
     if args.single_smoke_test:
         print("Running Single File Smoke Test with KNOWN Ground Truth Angle & Severe Environment...")
         gt_az, gt_el = 45.0, 30.0
@@ -189,12 +189,10 @@ def main(args):
     report_md += "## Conclusion on LCMV vs Robust Methods\n"
     lcmv_lam = agg_df.loc[agg_df['Algorithm'] == 'LCMV', 'LAM_Detectability'].values[0]
     rlcmv_lam = agg_df.loc[agg_df['Algorithm'] == 'RobustLCMV', 'LAM_Detectability'].values[0]
-
     if rlcmv_lam > lcmv_lam:
         report_md += f"**RobustLCMV is definitively superior to LCMV.** It achieved a higher average LAM Detectability ({rlcmv_lam:.3f} vs {lcmv_lam:.3f}). LCMV often suffers from target self-cancellation in real outdoor data due to slight steering mismatches or wind buffeting, suppressing the actual acoustic event. RobustLCMV successfully maintained the spatial target structure.\n"
     else:
         report_md += "In this dataset, LCMV performed well, though robust methods are generally safer for turbulent conditions.\n"
-
     report_path = os.path.join(args.output, "aggregate_report.md")
     with open(report_path, 'w') as f_out: f_out.write(report_md)
     print(f"Results saved to {args.output}/real_world_evaluation.csv")
