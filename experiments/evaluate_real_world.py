@@ -66,6 +66,11 @@ def main(args):
     try:
         from acoustic_sim.dsp_array import load_array
         pos = load_array(args.geo_file)
+        if M != 50:
+            pos.x = pos.x[:M]
+            pos.y = pos.y[:M]
+            pos.z = pos.z[:M]
+            pos.n_sensors = M
     except Exception as e:
         print(f"Error loading {args.geo_file}, falling back to default: {e}")
         pos = ArrayGeometry(np.zeros(50), np.zeros(50))
@@ -126,8 +131,11 @@ def main(args):
                 import librosa
                 audio, orig_sr = librosa.load(chunk_file, sr=fs, mono=False)
             except Exception as e:
+                import soundfile as sf
                 audio, orig_sr = sf.read(chunk_file)
-                audio = audio.T
+                if audio.ndim > 1 and audio.shape[1] < audio.shape[0]:
+                    audio = audio.T
+
             if audio.ndim == 1: continue
             if audio.shape[0] > M: audio = audio[:M, :]
             elif audio.shape[0] < M: audio = np.pad(audio, ((0, M - audio.shape[0]), (0, 0)))
