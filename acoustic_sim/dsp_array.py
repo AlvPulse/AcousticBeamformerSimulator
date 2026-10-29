@@ -52,25 +52,24 @@ import ast
 def load_array(filepath) -> ArrayGeometry:
     """
     Loads array geometry from a text file safely.
-    Expects lines like:
+    Expects multiline or single line format like:
     x=[...]
     y=[...]
     """
-    x_vals = []
-    y_vals = []
-
+    import re
     with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('x='):
-                # parse the list safely
-                val_str = line.split('=', 1)[1]
-                x_vals = ast.literal_eval(val_str)
-            elif line.startswith('y='):
-                val_str = line.split('=', 1)[1]
-                y_vals = ast.literal_eval(val_str)
+        content = f.read()
 
-    if not x_vals or not y_vals:
+    x_match = re.search(r'x\s*=\s*(\[.*?\])', content, flags=re.DOTALL)
+    y_match = re.search(r'y\s*=\s*(\[.*?\])', content, flags=re.DOTALL)
+
+    if x_match and y_match:
+        import ast
+        x_str = re.sub(r'\s+', '', x_match.group(1))
+        y_str = re.sub(r'\s+', '', y_match.group(1))
+        x_vals = ast.literal_eval(x_str)
+        y_vals = ast.literal_eval(y_str)
+    else:
         raise ValueError(f"Could not parse x and y coordinates from {filepath}")
 
     return ArrayGeometry(x_vals, y_vals)
