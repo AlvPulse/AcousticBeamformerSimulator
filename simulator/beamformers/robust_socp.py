@@ -14,6 +14,18 @@ class RobustSOCP(BaseBeamformer):
         a = self.compute_steering_vector(look_pos)
         Y = np.zeros((F, T), dtype=np.complex128)
 
+        # We can pre-compile the cvxpy problem by making parameters
+        L_param = cp.Parameter((M, M), complex=True)
+        a_0_param = cp.Parameter(M, complex=True)
+        w = cp.Variable(M, complex=True)
+        objective = cp.Minimize(cp.norm(L_param.conj().T @ w, 2))
+        w_H_a0 = cp.vdot(w, a_0_param)
+        constraints = [
+            cp.real(w_H_a0) >= self.epsilon * cp.norm(w, 2) + 1,
+            cp.imag(w_H_a0) == 0
+        ]
+        prob = cp.Problem(objective, constraints)
+
         for f in range(F):
             X_f = Zxx[:, f, :]
             R = (X_f @ np.conj(X_f).T) / T
@@ -28,36 +40,23 @@ class RobustSOCP(BaseBeamformer):
                 eigvals[eigvals < 0] = 0
                 L = eigvecs @ np.diag(np.sqrt(eigvals))
 
-            a_0 = a[f, :]
-
-            # Define CVXPY variables
-            w = cp.Variable(M, complex=True)
-
-            # Objective: min w^H R w <=> min ||L^H w||_2
-            objective = cp.Minimize(cp.norm(L.conj().T @ w, 2))
-
-            # Constraints:
-            # Re{w^H a_0} >= epsilon * ||w||_2 + 1
-            # Im{w^H a_0} == 0
-            # Wait, the CVXPY norm is real. We can express w^H a_0
-            w_H_a0 = cp.vdot(w, a_0) # cp.vdot(w, a) = w^H a
-
-            constraints = [
-                cp.real(w_H_a0) >= self.epsilon * cp.norm(w, 2) + 1,
-                cp.imag(w_H_a0) == 0
-            ]
-
-            prob = cp.Problem(objective, constraints)
+            L_param.value = L
+            a_0_param.value = a[f, :]
 
             try:
-                prob.solve(solver=cp.SCS) # SCS supports complex SOCP
+                prob.solve(solver=cp.SCS, warm_start=True)
                 w_opt = w.value
                 if w_opt is None:
-                    # Fallback to Delay and Sum if solver fails
-                    w_opt = a_0 / M
-            except Exception:
-                w_opt = a_0 / M
+                    raise ValueError("Solver failed")
+            except Exception as e:
+                # Fallback to standard LCMV if SOCP fails
+                invR = np.linalg.inv(R_reg)
+                num = invR @ a[f, :]
+                den = np.conj(a[f, :]).T @ num
+                w_opt = num / (den + 1e-12)
 
             Y[f, :] = np.conj(w_opt).T @ X_f
 
-        return self.istft(Y)
+        y_out = self.istft(Y)
+
+        return y_out
