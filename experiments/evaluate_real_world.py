@@ -66,13 +66,9 @@ def main(args):
     try:
         from acoustic_sim.dsp_array import load_array
         pos = load_array(args.geo_file)
-        if M != 50:
-            pos.x = pos.x[:M]
-            pos.y = pos.y[:M]
-            pos.z = pos.z[:M]
-            pos.n_sensors = M
     except Exception as e:
         print(f"Error loading {args.geo_file}, falling back to default: {e}")
+        from acoustic_sim.dsp_array import ArrayGeometry
         pos = ArrayGeometry(np.zeros(50), np.zeros(50))
 
     M = len(pos.x)
@@ -111,6 +107,7 @@ def main(args):
         audio = np.random.randn(M, fs) * 2.0
         mock_dir = os.path.join(args.input, "smoke_test_folder")
         os.makedirs(mock_dir, exist_ok=True)
+        import soundfile as sf
         sf.write(os.path.join(mock_dir, "smoke_test_chunk.wav"), audio.T, fs)
         print(f"Created synthetic test file with Turbulence, Wind, and Loud Interferer at {mock_dir}/smoke_test_chunk.wav")
 
@@ -163,6 +160,7 @@ def main(args):
                         lam_score = get_lam_detectability(y_out, fs)
 
                         # Save the audio for the user to hear
+                        import soundfile as sf
                         sf.write(os.path.join(audio_out_dir, f"audio_az{int(az)}_el{int(el)}.wav"), y_out, fs)
                     except Exception as e:
                         print(f"Error processing {bf_name} at az={az}, el={el}: {e}")
