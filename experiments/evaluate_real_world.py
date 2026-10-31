@@ -120,7 +120,14 @@ def main(args):
     for test_dir in test_folders:
         test_name = os.path.basename(test_dir)
         print(f"Processing directory: {test_name}")
-        chunk_files = sorted(glob.glob(os.path.join(test_dir, "*.wav")))
+        chunk_files = glob.glob(os.path.join(test_dir, "*.wav"))
+        if args.num_chunks > 0:
+            import random
+            random.shuffle(chunk_files)
+            chunk_files = chunk_files[:args.num_chunks]
+        else:
+            chunk_files = sorted(chunk_files)
+
         for chunk_file in chunk_files:
             chunk_name = os.path.basename(chunk_file).replace(".wav", "")
             print(f"  -> Scanning Chunk: {chunk_name}")
@@ -160,6 +167,12 @@ def main(args):
                         lam_score = get_lam_detectability(y_out, fs)
 
                         # Save the audio for the user to hear
+                        if args.apply_agc:
+                            # Normalize audio output to prevent silence/weak volume
+                            max_val = np.max(np.abs(y_out))
+                            if max_val > 1e-6:
+                                y_out = (y_out / max_val) * 0.9  # Scale to 90% full scale
+
                         import soundfile as sf
                         sf.write(os.path.join(audio_out_dir, f"audio_az{int(az)}_el{int(el)}.wav"), y_out, fs)
                     except Exception as e:
@@ -231,6 +244,8 @@ if __name__ == "__main__":
     parser.add_argument("--grid_points", type=int, default=8)
     parser.add_argument("--geo_file", default="array_geo.txt")
     parser.add_argument("--single_smoke_test", action="store_true")
+    parser.add_argument("--num_chunks", type=int, default=0, help="Number of random chunks to process per folder. 0 = all.")
+    parser.add_argument("--apply_agc", action="store_true", help="Apply automatic gain control to output audios")
     args = parser.parse_args()
     if not os.path.exists(args.input):
         os.makedirs(args.input, exist_ok=True)
