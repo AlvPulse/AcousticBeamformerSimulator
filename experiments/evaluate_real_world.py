@@ -12,6 +12,8 @@ sys.path.append('.')
 from acoustic_sim.dsp_array import ArrayGeometry
 
 import os
+import warnings
+warnings.filterwarnings("ignore", message="At least one mel filter has all zero values")
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 try:
     from transformers import pipeline
