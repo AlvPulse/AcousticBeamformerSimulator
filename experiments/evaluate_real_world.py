@@ -5,6 +5,7 @@ import warnings
 import argparse
 from functools import partial
 import concurrent.futures
+import scipy.signal as signal
 
 # Limit BLAS/OpenMP threading per worker to avoid CPU core thrashing
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -139,6 +140,8 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
     elif audio.shape[0] < M:
         audio = np.pad(audio, ((0, M - audio.shape[0]), (0, 0)))
 
+    audio= clean_multichannel_audio(audio, fs)
+
     # OPTIMIZATION: Compute Phase-STOR ONCE per grid coordinate (independent of beamformer)
     phase_stor_cache = {}
     for az, el in grid:
@@ -171,10 +174,10 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
                 # Output formatting logic with explicit AGC parameter check
                 max_val = np.max(np.abs(y_out))
-                if apply_agc and max_val > 1e-6:
-                    y_out_scaled = (y_out / max_val) * 0.9
-                else:
-                    y_out_scaled = y_out
+                # if apply_agc and max_val > 1e-6:
+                y_out_scaled = (y_out / max_val) * 0.9
+                # else:
+                #     y_out_scaled = y_out
 
                 sf.write(
                     os.path.join(audio_out_dir, f"audio_az{int(az)}_el{int(el)}.wav"),
@@ -321,6 +324,30 @@ def main(args):
 
     print(f"Results saved to {csv_path}")
     print(f"Aggregate Markdown Report saved to {report_path}")
+
+
+def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
+    """
+    Cleans raw multichannel array data:
+    1. Removes static DC mean per channel.
+    2. Zero-phase high-pass filter (no phase shift).
+    3. Tapers boundary edges to suppress startup/teardown transients.
+    """
+    # 1. Demean each channel
+    audio = audio - np.mean(audio, axis=1, keepdims=True)
+
+    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
+    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
+    audio = signal.sosfiltfilt(sos, audio, axis=1)
+
+    # 3. Smooth fade-in and fade-out (Tukey window taper)
+    taper_samples = int((taper_ms / 1000.0) * fs)
+    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
+        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
+        audio[:, :taper_samples] *= fade
+        audio[:, -taper_samples:] *= fade[::-1]
+
+    return audio
 
 
 if __name__ == "__main__":
