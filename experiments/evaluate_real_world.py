@@ -92,20 +92,37 @@ def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs)
 
 
 def get_lam_detectability(audio_1d, fs):
+    """Returns a dictionary of features."""
     if DISABLE_LAM:
+        feats = {
+            "Harmonic_Score": 0.0,
+            "Harmonic_Power": 0.0,
+            "Base_Freq": 0.0
+        }
+        for i in range(20):
+             feats[f"Harmonic_LinFeat_{i}"] = 0.0
+
         try:
             from experiments.feature_extraction.signal_processing import compute_spectrogram_and_peaks
-            from experiments.feature_extraction.harmonic_detection import track_harmonics
+            from experiments.feature_extraction.harmonic_detection import track_harmonics, extract_linear_features
             f, t, Pxx_db, peaks_per_frame = compute_spectrogram_and_peaks(audio_1d, fs, parallel=False)
             tracks = track_harmonics(peaks_per_frame)
             if tracks:
-                return float(tracks[0]['max_score'])
+                best = tracks[0]
+                feats["Harmonic_Score"] = float(best['max_score'])
+                feats["Harmonic_Power"] = float(best.get('signal_power', 0.0))
+                feats["Base_Freq"] = float(best.get('base_freq', 0.0))
+
+                lin_feats = extract_linear_features(best, num_harmonics=10)
+                for i, val in enumerate(lin_feats):
+                    feats[f"Harmonic_LinFeat_{i}"] = float(val)
         except Exception as e:
             pass
-        return 0.0
+        return feats
 
+    feats = {"LAM_Detectability": 0.0}
     if WORKER_AST_PIPELINE is None:
-        return 0.0
+        return feats
     if fs != 16000:
         audio_1d = librosa.resample(audio_1d, orig_sr=fs, target_sr=16000)
     audio_1d = np.squeeze(audio_1d)
@@ -113,10 +130,10 @@ def get_lam_detectability(audio_1d, fs):
     try:
         results = WORKER_AST_PIPELINE({"raw": audio_1d, "sampling_rate": 16000})
         if results and len(results) > 0:
-            return float(results[0]["score"])
+            feats["LAM_Detectability"] = float(results[0]["score"])
     except Exception:
         pass
-    return 0.0
+    return feats
 
 
 def generate_uniform_grid(n_points):
@@ -182,9 +199,15 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
                 y_out = bf.process(audio, look_pos)
                 p_out = float(np.mean(y_out**2))
                 p_stor = phase_stor_cache[(az, el)]
-                lam_score = get_lam_detectability(y_out, fs)
+                lam_feats = get_lam_detectability(y_out, fs)
 
                 # Output formatting logic with explicit AGC parameter check
+                if DISABLE_LAM:
+                    from experiments.feature_extraction.signal_processing import clean_multichannel_audio
+                    # clean_multichannel_audio expects (channels, samples), so expand and squeeze
+                    y_out_clean = clean_multichannel_audio(y_out[np.newaxis, :], fs=fs)
+                    y_out = np.squeeze(y_out_clean)
+
                 max_val = np.max(np.abs(y_out))
                 if apply_agc and max_val > 1e-6:
                     y_out_scaled = (y_out / max_val) * 0.9
@@ -199,9 +222,9 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
             except Exception as e:
                 p_out = 0.0
                 p_stor = 0.0
-                lam_score = 0.0
+                lam_feats = {}
 
-            chunk_results.append({
+            res_dict = {
                 "Folder": test_name,
                 "Chunk": chunk_name,
                 "Algorithm": bf_name,
@@ -209,10 +232,14 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
                 "Elevation": el,
                 "Output_Power": p_out,
                 "Phase_STOR": p_stor,
-                "LAM_Detectability": lam_score,
-            })
+            }
+            res_dict.update(lam_feats)
+            chunk_results.append(res_dict)
+
             energy_map.append(p_out)
-            lam_map.append(lam_score)
+            # Use Harmonic_Score or LAM_Detectability for the map
+            score_val = lam_feats.get("Harmonic_Score", lam_feats.get("LAM_Detectability", 0.0))
+            lam_map.append(score_val)
             phase_stor_map.append(p_stor)
 
         # Plot spatial heatmap per beamformer
@@ -244,6 +271,12 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         tmpr = 10 * np.log10(max_power / (median_power + 1e-12))
         for idx in range(len(grid)):
             chunk_results[len(chunk_results) - len(grid) + idx]["TMPR_Grid"] = tmpr
+
+    # Save the chunk-specific features to a CSV
+    if chunk_results:
+        chunk_df = pd.DataFrame(chunk_results)
+        chunk_csv_path = os.path.join(out_dir, f"{chunk_name}_features.csv")
+        chunk_df.to_csv(chunk_csv_path, index=False)
 
     return chunk_results
 
@@ -324,14 +357,16 @@ def main(args):
         report_md += "Since ground truth angles are unknown in field data, we rely on **Phase-STOR** (a metric of true acoustic coherence, ignoring wind amplitude) and **Harmonic Score** (custom acoustic feature matching) as proxies for success.\n\n"
     else:
         report_md += "Since ground truth angles are unknown in field data, we rely on **Phase-STOR** (a metric of true acoustic coherence, ignoring wind amplitude) and **LAM Detectability** (YAMNet/AST confidence that the signal is a real event, not noise) as proxies for success.\n\n"
+    metric_name = "Harmonic_Score" if args.disable_lam else "LAM_Detectability"
     report_md += "## Overall Algorithm Averages\n"
-    agg_df = df.groupby("Algorithm")[["Output_Power", "Phase_STOR", "LAM_Detectability", "TMPR_Grid"]].mean().reset_index()
+    agg_cols = ["Output_Power", "Phase_STOR", metric_name, "TMPR_Grid"]
+    agg_cols = [c for c in agg_cols if c in df.columns]
+    agg_df = df.groupby("Algorithm")[agg_cols].mean().reset_index()
     report_md += agg_df.to_markdown(index=False) + "\n\n"
 
     report_md += "## Conclusion on LCMV vs Robust Methods\n"
-    lcmv_rows = agg_df.loc[agg_df["Algorithm"] == "LCMV", "LAM_Detectability"].values
-    rlcmv_rows = agg_df.loc[agg_df["Algorithm"] == "RobustLCMV", "LAM_Detectability"].values
-    metric_name = "Harmonic Score" if args.disable_lam else "LAM Detectability"
+    lcmv_rows = agg_df.loc[agg_df["Algorithm"] == "LCMV", metric_name].values
+    rlcmv_rows = agg_df.loc[agg_df["Algorithm"] == "RobustLCMV", metric_name].values
     if len(lcmv_rows) > 0 and len(rlcmv_rows) > 0 and rlcmv_rows[0] > lcmv_rows[0]:
         report_md += f"**RobustLCMV is definitively superior to LCMV.** It achieved a higher average {metric_name} ({rlcmv_rows[0]:.3f} vs {lcmv_rows[0]:.3f}). LCMV often suffers from target self-cancellation in real outdoor data due to slight steering mismatches or wind buffeting, suppressing the actual acoustic event. RobustLCMV successfully maintained the spatial target structure.\n"
     else:
