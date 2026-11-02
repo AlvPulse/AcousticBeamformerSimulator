@@ -41,11 +41,13 @@ warnings.filterwarnings("ignore", message="At least one mel filter has all zero 
 WORKER_AST_PIPELINE = None
 WORKER_BEAMFORMERS = None
 WORKER_POS = None
+DISABLE_LAM = False
 
 
-def init_worker(geo_file, fs):
+def init_worker(geo_file, fs, disable_lam):
     """Initializes heavy models and beamformers once per worker process."""
-    global WORKER_AST_PIPELINE, WORKER_BEAMFORMERS, WORKER_POS
+    global WORKER_AST_PIPELINE, WORKER_BEAMFORMERS, WORKER_POS, DISABLE_LAM
+    DISABLE_LAM = disable_lam
 
     # 1. Load array geometry
     try:
@@ -69,15 +71,16 @@ def init_worker(geo_file, fs):
         "GSC_MCWF": GSC_MCWF(pos_3d, fs),
     }
 
-    # 3. Load AST model once
-    try:
-        from transformers import pipeline
-        WORKER_AST_PIPELINE = pipeline(
-            "audio-classification",
-            model="MIT/ast-finetuned-audioset-10-10-0.4593",
-        )
-    except Exception as e:
-        WORKER_AST_PIPELINE = None
+    # 3. Load AST model once (if not disabled)
+    if not DISABLE_LAM:
+        try:
+            from transformers import pipeline
+            WORKER_AST_PIPELINE = pipeline(
+                "audio-classification",
+                model="MIT/ast-finetuned-audioset-10-10-0.4593",
+            )
+        except Exception as e:
+            WORKER_AST_PIPELINE = None
 
 
 def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs):
@@ -89,6 +92,18 @@ def compute_phase_stor_metric(audio_multichannel, pos, target_az, target_el, fs)
 
 
 def get_lam_detectability(audio_1d, fs):
+    if DISABLE_LAM:
+        try:
+            from experiments.feature_extraction.signal_processing import compute_spectrogram_and_peaks
+            from experiments.feature_extraction.harmonic_detection import track_harmonics
+            f, t, Pxx_db, peaks_per_frame = compute_spectrogram_and_peaks(audio_1d, fs, parallel=False)
+            tracks = track_harmonics(peaks_per_frame)
+            if tracks:
+                return float(tracks[0]['max_score'])
+        except Exception as e:
+            pass
+        return 0.0
+
     if WORKER_AST_PIPELINE is None:
         return 0.0
     if fs != 16000:
@@ -212,7 +227,10 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
             fig.colorbar(sc1, ax=axs[1])
 
             sc2 = axs[2].scatter(azs, els, c=lam_map, cmap="plasma", s=100)
-            axs[2].set_title(f"{bf_name} LAM Detectability")
+            if DISABLE_LAM:
+                axs[2].set_title(f"{bf_name} Harmonic Score")
+            else:
+                axs[2].set_title(f"{bf_name} LAM Detectability")
             fig.colorbar(sc2, ax=axs[2])
 
             plt.suptitle(f"{test_name} - {chunk_name} | {bf_name}")
@@ -276,7 +294,7 @@ def main(args):
     with concurrent.futures.ProcessPoolExecutor(
         max_workers=args.workers,
         initializer=init_worker,
-        initargs=(args.geo_file, fs),
+        initargs=(args.geo_file, fs, args.disable_lam),
     ) as executor:
         futures = {executor.submit(chunk_func, task): task for task in tasks}
         completed = 0
@@ -302,7 +320,10 @@ def main(args):
 
     report_md = "# Aggregate Real-World Benchmarking Report\n\n"
     report_md += "This report summarizes the performance of spatial algorithms across all analyzed field data.\n\n"
-    report_md += "Since ground truth angles are unknown in field data, we rely on **Phase-STOR** (a metric of true acoustic coherence, ignoring wind amplitude) and **LAM Detectability** (YAMNet/AST confidence that the signal is a real event, not noise) as proxies for success.\n\n"
+    if args.disable_lam:
+        report_md += "Since ground truth angles are unknown in field data, we rely on **Phase-STOR** (a metric of true acoustic coherence, ignoring wind amplitude) and **Harmonic Score** (custom acoustic feature matching) as proxies for success.\n\n"
+    else:
+        report_md += "Since ground truth angles are unknown in field data, we rely on **Phase-STOR** (a metric of true acoustic coherence, ignoring wind amplitude) and **LAM Detectability** (YAMNet/AST confidence that the signal is a real event, not noise) as proxies for success.\n\n"
     report_md += "## Overall Algorithm Averages\n"
     agg_df = df.groupby("Algorithm")[["Output_Power", "Phase_STOR", "LAM_Detectability", "TMPR_Grid"]].mean().reset_index()
     report_md += agg_df.to_markdown(index=False) + "\n\n"
@@ -310,8 +331,9 @@ def main(args):
     report_md += "## Conclusion on LCMV vs Robust Methods\n"
     lcmv_rows = agg_df.loc[agg_df["Algorithm"] == "LCMV", "LAM_Detectability"].values
     rlcmv_rows = agg_df.loc[agg_df["Algorithm"] == "RobustLCMV", "LAM_Detectability"].values
+    metric_name = "Harmonic Score" if args.disable_lam else "LAM Detectability"
     if len(lcmv_rows) > 0 and len(rlcmv_rows) > 0 and rlcmv_rows[0] > lcmv_rows[0]:
-        report_md += f"**RobustLCMV is definitively superior to LCMV.** It achieved a higher average LAM Detectability ({rlcmv_rows[0]:.3f} vs {lcmv_rows[0]:.3f}). LCMV often suffers from target self-cancellation in real outdoor data due to slight steering mismatches or wind buffeting, suppressing the actual acoustic event. RobustLCMV successfully maintained the spatial target structure.\n"
+        report_md += f"**RobustLCMV is definitively superior to LCMV.** It achieved a higher average {metric_name} ({rlcmv_rows[0]:.3f} vs {lcmv_rows[0]:.3f}). LCMV often suffers from target self-cancellation in real outdoor data due to slight steering mismatches or wind buffeting, suppressing the actual acoustic event. RobustLCMV successfully maintained the spatial target structure.\n"
     else:
         report_md += "In this dataset, LCMV performed well, though robust methods are generally safer for turbulent conditions.\n"
 
@@ -333,6 +355,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_chunks", type=int, default=0, help="Number of chunks per folder. 0 = all.")
     parser.add_argument("--apply_agc", action="store_true", help="Apply automatic gain control to output audios")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1), help="Number of worker processes.")
+    parser.add_argument("--disable_lam", action="store_true", help="Disable heavy LAM (AST) and use harmonic features instead")
     args = parser.parse_args()
 
     os.makedirs(args.input, exist_ok=True)
