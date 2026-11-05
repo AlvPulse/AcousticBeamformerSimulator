@@ -106,7 +106,7 @@ def get_lam_detectability(audio_1d, fs):
 
 
 def generate_uniform_grid(n_points):
-    side = int(np.sqrt(n_points))
+    side = int(np.sqrt(n_points)*2.7)
     if side == 0:
         side = 1
     az_vals = np.linspace(-180, 180, side)
@@ -175,9 +175,9 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
                 # Output formatting logic with explicit AGC parameter check
                 max_val = np.max(np.abs(y_out))
                 # if apply_agc and max_val > 1e-6:
-                y_out_scaled = (y_out / max_val) * 0.9
+                #y_out_scaled = (y_out / max_val) * 0.9
                 # else:
-                #     y_out_scaled = y_out
+                y_out_scaled = y_out *2e2
 
                 sf.write(
                     os.path.join(audio_out_dir, f"audio_az{int(az)}_el{int(el)}.wav"),
