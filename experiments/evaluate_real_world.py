@@ -59,10 +59,12 @@ def init_worker(geo_file, fs, disable_lam):
     pos_3d = np.stack([pos.x, pos.y, np.zeros_like(pos.x)], axis=1)
 
     # 2. Instantiate beamformers once
+    from simulator.beamformers.robust_phase import PhaseOnlyLCMV
     WORKER_BEAMFORMERS = {
         "DAS": StandardDAS(pos_3d, fs),
         "Tapered_DAS": TaperedDAS(pos_3d, fs),
         "LCMV": LCMVSMI(pos_3d, fs),
+        "PhaseOnlyLCMV": PhaseOnlyLCMV(pos_3d, fs),
         "RobustLCMV": RobustLCMV(pos_3d, fs),
         "cGMM_MVDR": cGMM_MVDR(pos_3d, fs),
         "RobustSOCP": RobustSOCP(pos_3d, fs),
@@ -170,6 +172,12 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         audio = audio[:M, :]
     elif audio.shape[0] < M:
         audio = np.pad(audio, ((0, M - audio.shape[0]), (0, 0)))
+
+    # ARTIFICIAL MIC MISCALIBRATION (Simulate uncalibrated hardware)
+    # Apply random gain from 0.25x to 1.0x to each mic independently to break standard spatial nulling
+    np.random.seed(int(np.sum(np.abs(audio[:1000])) * 1e5) % (2**31 - 1)) # determinism per file
+    gains = np.random.uniform(0.25, 1.0, size=(audio.shape[0], 1))
+    audio = audio * gains
 
     # OPTIMIZATION: Compute Phase-STOR ONCE per grid coordinate (independent of beamformer)
     phase_stor_cache = {}
