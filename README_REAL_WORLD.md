@@ -9,6 +9,15 @@ Standard algorithms like LCMV suffer from "Target Self-Cancellation" in turbulen
 This pipeline evaluates the performance of algorithms using proxy metrics rather than relying on SNR, which can often be artificially inflated by loud wind gusts:
 1. **Phase-STOR**: A coherence metric that ignores raw amplitude and evaluates the spatial alignment of the signal.
 2. **LAM Detectability (YAMNet)**: A Large Audio Model evaluator that ensures the underlying spatial processing did not distort the target (e.g. drone, engine) out of recognition.
+3. **Harmonic Detectability (Custom)**: An offline harmonic extraction metric used when LAM is disabled, to avoid LAM's sensitivity to output amplitude.
+
+## Uncalibrated Microphone Hardware
+A common problem in real-world outdoor arrays is hardware variance—cheap microphones where the gain of one mic might be 1/4th of another. This destroys spatial nulling in algorithms like DAS and standard LCMV because the signals cannot cancel perfectly.
+
+Since a static noise-floor calibration file is often unavailable offline, this simulator includes algorithms specifically adapted to ignore input calibration entirely:
+- **PhaseOnlyLCMV**: Normalizes every STFT bin to compute a phase-only spatial covariance matrix. It derives exact nulling weights purely from phase, entirely bypassing amplitude mismatch, before reconstructing the signal.
+- **Robust SOCP (Vorobyov-Gershman)**: A worst-case robust optimization that mathematically builds a tolerance boundary around the steering vector, rendering it highly resistant to hardware amplitude drift.
+- **EBB (Eigenspace-Based Beamformer)**: Projects the nominal steering vector onto the actual data's signal subspace, effectively auto-calibrating the phase and amplitude offsets relative to the true acoustic arrival.
 
 ## Requirements
 
