@@ -218,9 +218,8 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
                 # Output formatting logic with explicit AGC parameter check
                 if DISABLE_LAM:
-                #    from experiments.feature_extraction.signal_processing import clean_multichannel_audio
                     # clean_multichannel_audio expects (channels, samples), so expand and squeeze
-                    y_out_clean = feat_clean_audio(y_out[np.newaxis, :], fs=fs)
+                    y_out_clean = clean_multichannel_audio(y_out[np.newaxis, :], fs=fs)
                     y_out = np.squeeze(y_out_clean)
 
                 max_val = np.max(np.abs(y_out))
@@ -284,8 +283,14 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         median_power = float(np.median(energy_map))
         max_power = float(np.max(energy_map))
         min_power = float(np.min(energy_map))
-        tmpr = 10 * np.log10(max_power / (median_power + 1e-12))
-        ssr = 10 * np.log10(max_power / (min_power + 1e-12)) # Spatial Suppression Ratio (Nulling Depth)
+
+        # Protect against taking log of zero or negative from floating point issues
+        median_power = max(1e-12, median_power)
+        max_power = max(1e-12, max_power)
+        min_power = max(1e-12, min_power)
+
+        tmpr = 10 * np.log10(max_power / median_power)
+        ssr = 10 * np.log10(max_power / min_power) # Spatial Suppression Ratio (Nulling Depth)
         for idx in range(len(grid)):
             chunk_results[len(chunk_results) - len(grid) + idx]["TMPR_Grid"] = tmpr
             chunk_results[len(chunk_results) - len(grid) + idx]["SSR_Depth_dB"] = ssr
@@ -429,7 +434,7 @@ if __name__ == "__main__":
     parser.add_argument("--grid_points", type=int, default=8)
     parser.add_argument("--geo_file", default="array_geo.csv")
     parser.add_argument("--single_smoke_test", action="store_true")
-    parser.add_argument("--num_chunks", type=int, default=0, help="Number of chunks per folder. 0 = all.")
+    parser.add_argument("--num_chunks", type=int, default=1, help="Number of chunks per folder. 0 = all.")
     parser.add_argument("--apply_agc", action="store_true", help="Apply automatic gain control to output audios")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1), help="Number of worker processes.")
     parser.add_argument("--disable_lam", action="store_true", help="Disable heavy LAM (AST) and use harmonic features instead")
