@@ -17,6 +17,8 @@ from simulator.beamformers.cgmm_mvdr import cGMM_MVDR
 from simulator.beamformers.das import StandardDAS
 from simulator.beamformers.robust_lcmv import RobustLCMV
 from simulator.beamformers.gsc_mcwf import GSC_MCWF
+from simulator.beamformers.ilrma import ILRMA
+from simulator.beamformers.sve_lcmv import SVE_LCMV
 
 from simulator.evaluation.metrics_acoustic import compute_si_sdr, compute_lsd, compute_array_gain
 from simulator.evaluation.metrics_lam import compute_clap_similarity
@@ -53,7 +55,9 @@ def run_scenario(scenario_id, target_snr, interferer_inr, sigma_phi, n_trials=5,
         "EBB": EBB(pos_mics, FS),
         "SOCP": RobustSOCP(pos_mics, FS),
         "cGMM-MVDR": cGMM_MVDR(pos_mics, FS),
-        "GSC-MCWF": GSC_MCWF(pos_mics, FS)
+        "GSC-MCWF": GSC_MCWF(pos_mics, FS),
+        "ILRMA": ILRMA(pos_mics, FS),
+        "SVE-LCMV": SVE_LCMV(pos_mics, FS)
     }
 
     profiler = Profiler(FS)
@@ -133,6 +137,11 @@ def main():
     print("Running Scenario S2...")
     res_s2 = run_scenario("S2_LowSNR", target_snr=-25, interferer_inr=10, sigma_phi=0.0)
     all_results.extend(res_s2)
+
+    # S3: Outdoor Wind (Phase Jitter)
+    print("Running Scenario S3...")
+    res_s3 = run_scenario("S3_Wind", target_snr=-10, interferer_inr=15, sigma_phi=0.3)
+    all_results.extend(res_s3)
 
     df = pd.DataFrame(all_results)
     df.to_csv("benchmark_results.csv", index=False)
