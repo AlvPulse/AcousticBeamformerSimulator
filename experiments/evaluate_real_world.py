@@ -283,8 +283,14 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         median_power = float(np.median(energy_map))
         max_power = float(np.max(energy_map))
         min_power = float(np.min(energy_map))
-        tmpr = 10 * np.log10(max_power / (median_power + 1e-12))
-        ssr = 10 * np.log10(max_power / (min_power + 1e-12)) # Spatial Suppression Ratio (Nulling Depth)
+
+        # Protect against taking log of zero or negative from floating point issues
+        median_power = max(1e-12, median_power)
+        max_power = max(1e-12, max_power)
+        min_power = max(1e-12, min_power)
+
+        tmpr = 10 * np.log10(max_power / median_power)
+        ssr = 10 * np.log10(max_power / min_power) # Spatial Suppression Ratio (Nulling Depth)
         for idx in range(len(grid)):
             chunk_results[len(chunk_results) - len(grid) + idx]["TMPR_Grid"] = tmpr
             chunk_results[len(chunk_results) - len(grid) + idx]["SSR_Depth_dB"] = ssr
