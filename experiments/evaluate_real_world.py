@@ -427,7 +427,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", default="data/field_tests")
     parser.add_argument("--output", default="docs/real_world_outputs")
     parser.add_argument("--grid_points", type=int, default=8)
-    parser.add_argument("--geo_file", default="array_geo.txt")
+    parser.add_argument("--geo_file", default="array_geo.csv")
     parser.add_argument("--single_smoke_test", action="store_true")
     parser.add_argument("--num_chunks", type=int, default=0, help="Number of chunks per folder. 0 = all.")
     parser.add_argument("--apply_agc", action="store_true", help="Apply automatic gain control to output audios")
