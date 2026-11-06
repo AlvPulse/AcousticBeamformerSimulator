@@ -214,7 +214,7 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
                 # Output formatting logic with explicit AGC parameter check
                 if DISABLE_LAM:
-                    from experiments.feature_extraction.signal_processing import clean_multichannel_audio
+                #    from experiments.feature_extraction.signal_processing import clean_multichannel_audio
                     # clean_multichannel_audio expects (channels, samples), so expand and squeeze
                     y_out_clean = clean_multichannel_audio(y_out[np.newaxis, :], fs=fs)
                     y_out = np.squeeze(y_out_clean)
@@ -291,6 +291,28 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
     return chunk_results
 
+def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
+    """
+    Cleans raw multichannel array data:
+    1. Removes static DC mean per channel.
+    2. Zero-phase high-pass filter (no phase shift).
+    3. Tapers boundary edges to suppress startup/teardown transients.
+    """
+    # 1. Demean each channel
+    audio = audio - np.mean(audio, axis=1, keepdims=True)
+
+    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
+    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
+    audio = signal.sosfiltfilt(sos, audio, axis=1)
+
+    # 3. Smooth fade-in and fade-out (Tukey window taper)
+    taper_samples = int((taper_ms / 1000.0) * fs)
+    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
+        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
+        audio[:, :taper_samples] *= fade
+        audio[:, -taper_samples:] *= fade[::-1]
+
+    return audio
 
 def main(args):
     fs = 16000
@@ -390,29 +412,6 @@ def main(args):
     print(f"Results saved to {csv_path}")
     print(f"Aggregate Markdown Report saved to {report_path}")
 
-
-def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
-    """
-    Cleans raw multichannel array data:
-    1. Removes static DC mean per channel.
-    2. Zero-phase high-pass filter (no phase shift).
-    3. Tapers boundary edges to suppress startup/teardown transients.
-    """
-    # 1. Demean each channel
-    audio = audio - np.mean(audio, axis=1, keepdims=True)
-
-    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
-    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
-    audio = signal.sosfiltfilt(sos, audio, axis=1)
-
-    # 3. Smooth fade-in and fade-out (Tukey window taper)
-    taper_samples = int((taper_ms / 1000.0) * fs)
-    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
-        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
-        audio[:, :taper_samples] *= fade
-        audio[:, -taper_samples:] *= fade[::-1]
-
-    return audio
 
 
 if __name__ == "__main__":
