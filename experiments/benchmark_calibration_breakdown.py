@@ -16,6 +16,9 @@ from simulator.beamformers.robust_phase import PhaseOnlyLCMV
 from simulator.beamformers.robust_socp import RobustSOCP
 from simulator.beamformers.ebb import EBB
 from simulator.beamformers.gev import GEV
+from simulator.beamformers.ilrma import ILRMA
+from simulator.beamformers.sve_lcmv import SVE_LCMV
+from simulator.beamformers.gsc_mcwf import GSC_MCWF
 
 def generate_tonal_signal(fs, n_samples, f0=400, harmonics=5):
     t = np.arange(n_samples) / fs
@@ -52,7 +55,10 @@ def main():
         "PhaseOnlyLCMV": PhaseOnlyLCMV(pos_3d, fs),
         "RobustSOCP": RobustSOCP(pos_3d, fs),
         "EBB": EBB(pos_3d, fs),
-        "GEV": GEV(pos_3d, fs)
+        "GEV": GEV(pos_3d, fs),
+        "ILRMA": ILRMA(pos_3d, fs),
+        "SVE_LCMV": SVE_LCMV(pos_3d, fs),
+        "GSC_MCWF": GSC_MCWF(pos_3d, fs)
     }
 
     # Sweep Parameters
@@ -86,7 +92,9 @@ def main():
                 y_out = bf.process(mix, look_pos=target_pos)
                 score = get_harmonic_score(y_out, fs)
             except Exception as e:
+                import traceback
                 print(f"Error {name}: {e}")
+                traceback.print_exc()
                 score = -150.0
 
             results.append({

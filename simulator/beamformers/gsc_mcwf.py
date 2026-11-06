@@ -43,13 +43,23 @@ class GSC_MCWF(BaseBeamformer):
             R_uu = (U_noise @ np.conj(U_noise).T) / T
             r_uy = (U_noise @ np.conj(y_fbf).T) / T
 
-            # Diagonal loading for robustness
-            R_uu += 1e-3 * np.trace(R_uu) * np.eye(M-1)
+            # Heavy Diagonal loading (Tikhonov Regularization) for robust norm constraint
+            # This prevents the adaptive filter from perfectly cancelling the target
+            # if it leaks into the noise reference due to array mismatch or wind.
+            loading_factor = max(1e-2, 0.1 * np.real(np.trace(R_uu)) / (M - 1))
+            R_uu += loading_factor * np.eye(M-1)
 
             try:
                 W = np.linalg.inv(R_uu) @ r_uy
             except np.linalg.LinAlgError:
                 W = np.linalg.pinv(R_uu) @ r_uy
+
+            # Explicit Norm Constraint on Adaptive Weights
+            # If the filter tries to apply massive gains (usually to cancel leaked target), clamp it.
+            w_norm = np.linalg.norm(W)
+            max_norm = 1.0
+            if w_norm > max_norm:
+                W = W * (max_norm / w_norm)
 
             # Cancel noise
             y_cancel = np.conj(W).T @ U_noise
