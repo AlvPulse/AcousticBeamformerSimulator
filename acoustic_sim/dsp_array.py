@@ -51,12 +51,33 @@ import ast
 
 def load_array(filepath) -> ArrayGeometry:
     """
-    Loads array geometry from a text file safely.
-    Expects multiline or single line format like:
-    x=[...]
-    y=[...]
+    Loads array geometry from a file.
+    Supports:
+    1. .csv format: rows of coordinates. We extract the first two columns as x and y.
+    2. .txt format: expects format like x=[...] and y=[...]
     """
+    import os
     import re
+    import ast
+    import pandas as pd
+
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == '.csv':
+        # Load CSV using pandas, assuming either no header or standard numeric columns
+        # We will attempt to read it and extract the first two columns
+        try:
+            df = pd.read_csv(filepath, header=None)
+            # If the CSV has headers like x, y, Z, we should try to drop non-numeric rows or use headers
+            # A simple approach for arbitrary CSVs is to drop any rows that contain NaNs in the first two cols
+            df = df.apply(pd.to_numeric, errors='coerce').dropna(subset=[0, 1])
+            x_vals = df.iloc[:, 0].tolist()
+            y_vals = df.iloc[:, 1].tolist()
+            return ArrayGeometry(x_vals, y_vals)
+        except Exception as e:
+            raise ValueError(f"Failed to parse CSV array geometry: {e}")
+
+    # Fallback to standard .txt parsing
     with open(filepath, 'r') as f:
         content = f.read()
 
@@ -64,7 +85,6 @@ def load_array(filepath) -> ArrayGeometry:
     y_match = re.search(r'y\s*=\s*(\[.*?\])', content, flags=re.DOTALL)
 
     if x_match and y_match:
-        import ast
         x_str = re.sub(r'\s+', '', x_match.group(1))
         y_str = re.sub(r'\s+', '', y_match.group(1))
         x_vals = ast.literal_eval(x_str)
