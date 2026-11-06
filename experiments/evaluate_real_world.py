@@ -61,6 +61,8 @@ def init_worker(geo_file, fs, disable_lam):
 
     # 2. Instantiate beamformers once
     from simulator.beamformers.robust_phase import PhaseOnlyLCMV
+    from simulator.beamformers.ilrma import ILRMA
+    from simulator.beamformers.sve_lcmv import SVE_LCMV
     WORKER_BEAMFORMERS = {
         "DAS": StandardDAS(pos_3d, fs),
         "Tapered_DAS": TaperedDAS(pos_3d, fs),
@@ -72,6 +74,8 @@ def init_worker(geo_file, fs, disable_lam):
         "EBB": EBB(pos_3d, fs),
         "MultiRank_OSP": MultiRankOSP(pos_3d, fs),
         "GSC_MCWF": GSC_MCWF(pos_3d, fs),
+        "ILRMA": ILRMA(pos_3d, fs),
+        "SVE_LCMV": SVE_LCMV(pos_3d, fs)
     }
 
     # 3. Load AST model once (if not disabled)
@@ -214,9 +218,9 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
                 # Output formatting logic with explicit AGC parameter check
                 if DISABLE_LAM:
-                    from experiments.feature_extraction.signal_processing import clean_multichannel_audio
+                    from experiments.feature_extraction.signal_processing import clean_multichannel_audio as feat_clean_audio
                     # clean_multichannel_audio expects (channels, samples), so expand and squeeze
-                    y_out_clean = clean_multichannel_audio(y_out[np.newaxis, :], fs=fs)
+                    y_out_clean = feat_clean_audio(y_out[np.newaxis, :], fs=fs)
                     y_out = np.squeeze(y_out_clean)
 
                 max_val = np.max(np.abs(y_out))
@@ -279,9 +283,12 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         # Calculate TMPR across the spatial grid
         median_power = float(np.median(energy_map))
         max_power = float(np.max(energy_map))
+        min_power = float(np.min(energy_map))
         tmpr = 10 * np.log10(max_power / (median_power + 1e-12))
+        ssr = 10 * np.log10(max_power / (min_power + 1e-12)) # Spatial Suppression Ratio (Nulling Depth)
         for idx in range(len(grid)):
             chunk_results[len(chunk_results) - len(grid) + idx]["TMPR_Grid"] = tmpr
+            chunk_results[len(chunk_results) - len(grid) + idx]["SSR_Depth_dB"] = ssr
 
     # Save the chunk-specific features to a CSV
     if chunk_results:
@@ -370,7 +377,8 @@ def main(args):
         report_md += "Since ground truth angles are unknown in field data, we rely on **Phase-STOR** (a metric of true acoustic coherence, ignoring wind amplitude) and **LAM Detectability** (YAMNet/AST confidence that the signal is a real event, not noise) as proxies for success.\n\n"
     metric_name = "Harmonic_Score" if args.disable_lam else "LAM_Detectability"
     report_md += "## Overall Algorithm Averages\n"
-    agg_cols = ["Output_Power", "Phase_STOR", metric_name, "TMPR_Grid"]
+    report_md += "Note: **SSR_Depth_dB** (Spatial Suppression Ratio) measures how effectively the algorithm suppresses the target when steered away from it. A high SSR means deep nulls and high spatial selectivity (it doesn't listen to all angles).\n\n"
+    agg_cols = ["Output_Power", "Phase_STOR", metric_name, "TMPR_Grid", "SSR_Depth_dB"]
     agg_cols = [c for c in agg_cols if c in df.columns]
     agg_df = df.groupby("Algorithm")[agg_cols].mean().reset_index()
     report_md += agg_df.to_markdown(index=False) + "\n\n"
