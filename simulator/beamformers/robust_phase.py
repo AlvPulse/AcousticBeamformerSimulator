@@ -32,7 +32,24 @@ class PhaseOnlyLCMV(BaseBeamformer):
             # Phase-covariance matrix R: (M, M)
             R = (X_f_phase @ np.conj(X_f_phase).T) / T
 
-            R_load = R + self.epsilon * np.trace(R) * np.eye(M)
+            # Ledoit-Wolf Optimal Covariance Shrinkage
+            trace_R = np.trace(R)
+            mu = trace_R / M
+            F_norm_sq = np.sum(np.abs(R - mu * np.eye(M))**2)
+
+            var_est = 0
+            for t in range(T):
+                x_t = X_f_phase[:, t:t+1]
+                R_t = x_t @ np.conj(x_t).T
+                var_est += np.sum(np.abs(R_t - R)**2)
+            var_est /= (T**2)
+
+            if F_norm_sq > 0:
+                shrinkage = max(0.0, min(1.0, float(np.real(var_est / F_norm_sq))))
+            else:
+                shrinkage = 1.0
+
+            R_load = (1 - shrinkage) * R + shrinkage * mu * np.eye(M)
 
             try:
                 R_inv = np.linalg.inv(R_load)
