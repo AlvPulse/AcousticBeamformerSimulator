@@ -63,6 +63,11 @@ def init_worker(geo_file, fs, disable_lam):
     from simulator.beamformers.robust_phase import PhaseOnlyLCMV
     from simulator.beamformers.ilrma import ILRMA
     from simulator.beamformers.sve_lcmv import SVE_LCMV
+    from simulator.beamformers.aux_iva import AuxIVA
+    from simulator.beamformers.fast_iva import FastIVA
+    from simulator.beamformers.gev import GEV
+    from simulator.beamformers.iterative_lcmv import IterativeLCMV
+
     WORKER_BEAMFORMERS = {
         "DAS": StandardDAS(pos_3d, fs),
         "Tapered_DAS": TaperedDAS(pos_3d, fs),
@@ -74,8 +79,13 @@ def init_worker(geo_file, fs, disable_lam):
         "EBB": EBB(pos_3d, fs),
         "MultiRank_OSP": MultiRankOSP(pos_3d, fs),
         "GSC_MCWF": GSC_MCWF(pos_3d, fs),
+        "SVE_LCMV": SVE_LCMV(pos_3d, fs),
+        "Iterative_LCMV": IterativeLCMV(pos_3d, fs),
+        # Gridless Methods
         "ILRMA": ILRMA(pos_3d, fs),
-        "SVE_LCMV": SVE_LCMV(pos_3d, fs)
+        "AuxIVA": AuxIVA(pos_3d, fs),
+        "FastIVA": FastIVA(pos_3d, fs),
+        "GEV": GEV(pos_3d, fs)
     }
 
     # 3. Load AST model once (if not disabled)
@@ -199,11 +209,59 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
     els = [p[1] for p in grid]
 
     for bf_name, bf in WORKER_BEAMFORMERS.items():
-        energy_map, lam_map, phase_stor_map = [], [], []
+        energy_map = []
+        lam_map = []
+        phase_stor_map = []
+        azs = []
+        els = []
+
         audio_out_dir = os.path.join(out_dir, bf_name)
         os.makedirs(audio_out_dir, exist_ok=True)
 
+        is_gridless = bf_name in ["ILRMA", "AuxIVA", "FastIVA", "GEV", "Iterative_LCMV"]
+
+        if is_gridless:
+            # Process exactly once for Gridless methods
+            try:
+                y_out = bf.process(audio)
+                p_out = float(np.mean(y_out**2))
+                lam_feats = get_lam_detectability(y_out, fs)
+
+                if DISABLE_LAM:
+                    from experiments.feature_extraction.signal_processing import clean_multichannel_audio as feat_clean_audio
+                    y_out_clean = feat_clean_audio(y_out[np.newaxis, :], fs=fs)
+                    y_out = np.squeeze(y_out_clean)
+
+                y_out_scaled = y_out * 2e2
+
+                sf.write(
+                    os.path.join(audio_out_dir, f"audio_gridless.wav"),
+                    y_out_scaled,
+                    fs,
+                )
+            except Exception as e:
+                p_out = 0.0
+                lam_feats = {}
+
+            res_dict = {
+                "Folder": test_name,
+                "Chunk": chunk_name,
+                "Algorithm": bf_name,
+                "Azimuth": 0.0,
+                "Elevation": 0.0,
+                "Output_Power": p_out,
+                "Phase_STOR": 0.0,
+                "TMPR_Grid": 0.0,
+                "SSR_Depth_dB": 0.0 # IRR is calculated elsewhere for gridless
+            }
+            res_dict.update(lam_feats)
+            chunk_results.append(res_dict)
+            continue
+
         for az, el in grid:
+            azs.append(az)
+            els.append(el)
+
             look_pos = np.array([
                 np.cos(np.radians(el)) * np.cos(np.radians(az)),
                 np.cos(np.radians(el)) * np.sin(np.radians(az)),

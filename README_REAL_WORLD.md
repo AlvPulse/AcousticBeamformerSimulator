@@ -1,28 +1,25 @@
 # Real-World Acoustic Benchmarking Pipeline
 
-This pipeline allows you to evaluate the performance of various beamforming algorithms (such as DAS, LCMV, and Robust LCMV) on real-world, multi-channel outdoor acoustic datasets where the true ground truth direction of the target is unknown.
+This pipeline allows you to evaluate the performance of various beamforming algorithms on real-world, multi-channel outdoor acoustic datasets where the true ground truth direction of the target is unknown.
 
-## Purpose
+## Purpose & Robust Algorithms
 
-Standard algorithms like LCMV suffer from "Target Self-Cancellation" in turbulent outdoor environments. If the steering vector does not match perfectly due to wind or calibration errors, LCMV attempts to null the target, drastically reducing the quality of the signal.
+Standard algorithms like LCMV suffer from "Target Self-Cancellation" in turbulent outdoor environments. If the steering vector does not match perfectly due to wind, uncalibrated hardware gains, or indoor multipath, the algorithm attempts to null the target.
 
-This pipeline evaluates the performance of algorithms using proxy metrics rather than relying on SNR, which can often be artificially inflated by loud wind gusts:
-1. **Phase-STOR**: A coherence metric that ignores raw amplitude and evaluates the spatial alignment of the signal.
-2. **LAM Detectability (YAMNet)**: A Large Audio Model evaluator that ensures the underlying spatial processing did not distort the target (e.g. drone, engine) out of recognition.
-3. **Harmonic Detectability (Custom)**: An offline harmonic extraction metric used when LAM is disabled, to avoid LAM's sensitivity to output amplitude.
+To solve this, this repository includes three tiers of State-of-the-Art (SOTA) algorithms:
+1. **Robust Grid-Search Methods:**
+   * **PhaseOnlyLCMV:** Normalizes every STFT bin to compute a phase-only spatial covariance matrix, entirely bypassing hardware gain mismatches.
+   * **SVE_LCMV (Steering Vector Estimation):** Extracts the *actual* steering vector from the data's dominant covariance eigenvector, making it immune to small geometric perturbations.
+   * **GSC_MCWF:** Uses a Generalized Sidelobe Canceller with Tikhonov regularization and norm-constraints to prevent target self-cancellation.
+2. **Iterative Peak Depletion (LOCATA-inspired):**
+   * **Iterative_LCMV:** Instead of assuming a single target, it iteratively finds the highest spatial peak, extracts the audio, and mathematically projects its covariance out of the data matrix to easily resolve dense, multi-interferer environments.
+3. **Gridless Blind Source Separation (BSS):**
+   * **ILRMA, AuxIVA, FastIVA, and GEV:** These methods completely bypass the spatial $N$-point grid search. They separate sources purely based on statistical independence or covariance structure. They are immune to array geometry errors and compute significantly faster than grid-search variants.
 
 ## Uncalibrated Microphone Hardware
-A common problem in real-world outdoor arrays is hardware variance—cheap microphones where the gain of one mic might be 1/4th of another. This destroys spatial nulling in algorithms like DAS and standard LCMV because the signals cannot cancel perfectly.
-
-Since a static noise-floor calibration file is often unavailable offline, this simulator includes algorithms specifically adapted to ignore input calibration entirely:
-- **PhaseOnlyLCMV**: Normalizes every STFT bin to compute a phase-only spatial covariance matrix. It derives exact nulling weights purely from phase, entirely bypassing amplitude mismatch, before reconstructing the signal.
-- **Robust SOCP (Vorobyov-Gershman)**: A worst-case robust optimization that mathematically builds a tolerance boundary around the steering vector, rendering it highly resistant to hardware amplitude drift.
-- **EBB (Eigenspace-Based Beamformer)**: Projects the nominal steering vector onto the actual data's signal subspace, effectively auto-calibrating the phase and amplitude offsets relative to the true acoustic arrival.
+A common problem in real-world outdoor arrays is hardware variance—cheap microphones where the gain of one mic might be 1/4th of another. You can supply your exact microphone coordinates using the `--geo_file` argument. The system natively supports loading `.csv` files structured either as `(3 rows × N cols)` or `(N rows × 3 cols)`.
 
 ## Requirements
-
-Ensure your Python environment is set up and dependencies are installed. You will need `tensorflow` and `tensorflow-hub` for the LAM Detectability metrics.
-
 ```bash
 pip install numpy scipy soundfile matplotlib pandas librosa tabulate tensorflow tensorflow-hub
 ```
@@ -39,34 +36,44 @@ data/field_tests/
 │   ├── chunk_000.wav
 │   ├── chunk_001.wav
 │   └── ...
-├── 2024_08_18_19_13_21.045305/
-│   └── ...
 ```
 
 ### 2. Run the Evaluation Scanner
-Run the `evaluate_real_world.py` script. The scanner will process every chunk, test it across a spatial grid (azimuth/elevation) for every beamforming algorithm, and calculate all proxy metrics.
+Run the `evaluate_real_world.py` script. The scanner will process every chunk for every beamforming algorithm and calculate all proxy metrics (Phase-STOR, Harmonic Score, and Spatial Suppression Ratio).
 
 ```bash
-PYTHONPATH=. python3 experiments/evaluate_real_world.py --input data/field_tests/ --output docs/real_world_outputs/ --grid_points 64
+PYTHONPATH=. python3 experiments/evaluate_real_world.py --input data/field_tests/ --output docs/real_world_outputs/ --grid_points 64 --geo_file array_geo.csv
 ```
+
+### 🚀 High-Performance Server Execution (Multi-Core & GPU)
+If you are deploying this benchmarking suite on a powerful server with many CPU cores and a GPU, you should optimize the execution parameters:
+
+1. **Maximize CPU Cores:**
+   * The pipeline is heavily parallelized. Use the `--workers` argument to saturate your CPU cores. For example, on a 64-core server, use `--workers 60`.
+2. **GPU Acceleration for LAM Detectability:**
+   * By default, the pipeline calculates "Harmonic Score". If you want to use the heavy HuggingFace/AST neural network for Large Audio Model (LAM) event detection, you must **omit** the `--disable_lam` flag.
+   * To ensure the AST model utilizes your server's GPU, prefix the execution with `CUDA_VISIBLE_DEVICES=0`.
+3. **Optimized Server Command:**
+   ```bash
+   CUDA_VISIBLE_DEVICES=0 PYTHONPATH=. python3 experiments/evaluate_real_world.py \
+       --input data/field_tests/ \
+       --output docs/real_world_outputs/ \
+       --grid_points 64 \
+       --geo_file array_geo.csv \
+       --workers 60
+   ```
 
 **Arguments:**
-* `--input`: The path to the folder containing your test sets (default: `data/field_tests`).
-* `--output`: Where to save the output CSVs, spatial heatmaps, and markdown reports (default: `docs/real_world_outputs`).
-* `--grid_points`: The number of spherical coordinates to scan for the target (e.g. 64 or 128).
-* `--geo_file`: Optional custom array geometry coordinates file.
+* `--input`: Path to test sets (default: `data/field_tests`).
+* `--output`: Save location for CSVs, heatmaps, and reports.
+* `--grid_points`: Number of spherical coordinates to scan for grid-based methods.
+* `--geo_file`: Path to array geometry (supports `.txt` or `.csv`).
+* `--workers`: Number of parallel multiprocessing workers.
+* `--disable_lam`: Disables the heavy Neural Network AST pipeline and uses Harmonic Score instead (highly recommended for pure acoustic benchmarking).
+* `--single_smoke_test`: Runs a quick synthetic sanity check.
 
 ### 3. Review the Results
-
-Once complete, navigate to the output directory (`docs/real_world_outputs/`). You will find:
-
-1. **`aggregate_report.md`**: A summary Markdown file averaging performance across all datasets. It mathematically concludes which algorithm (e.g., LCMV vs Robust LCMV) is superior for maintaining acoustic integrity in the wild.
-2. **`real_world_evaluation.csv`**: A raw spreadsheet of every evaluated spatial coordinate for every file and algorithm, allowing for custom data analysis.
-3. **Per-File Spatial Maps**: Inside the output folders, you will see `[Algorithm]_spatial_maps.png` comparing the spatial heatmaps of Raw Power, Phase-STOR, and LAM Detectability to visually diagnose wind vs. true targets.
-
-### Smoke Testing
-If you want to verify the pipeline logic against a known ground truth angle in a highly turbulent synthetic environment, run the smoke test:
-
-```bash
-PYTHONPATH=. python3 experiments/evaluate_real_world.py --single_smoke_test --grid_points 16
-```
+Navigate to the output directory (`docs/real_world_outputs/`). You will find:
+1. **`aggregate_report.md`**: A summary Markdown file averaging performance across all datasets.
+2. **`real_world_evaluation.csv`**: A raw spreadsheet of every evaluated spatial coordinate.
+3. **Per-File Spatial Maps**: PNGs comparing the spatial heatmaps of Raw Power and Phase-STOR. *(Note: Gridless methods like AuxIVA do not generate spatial heatmaps, as they do not search a physical grid).*
