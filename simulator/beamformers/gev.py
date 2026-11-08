@@ -66,4 +66,10 @@ class GEV(BaseBeamformer):
             Y[f, :] = np.conj(w).T @ X_f
 
         y_out = self.istft(Y)
+
+        # GEV weights can scale arbitrarily (eigenvectors). Normalize output to prevent Harmonic Score explosion.
+        max_val = np.max(np.abs(y_out)) + 1e-12
+        if max_val > 10.0:
+            y_out = y_out / max_val
+
         return y_out
