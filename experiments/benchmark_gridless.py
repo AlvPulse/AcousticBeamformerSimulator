@@ -16,6 +16,7 @@ from simulator.beamformers.fast_iva import FastIVA
 from simulator.beamformers.sve_lcmv import SVE_LCMV
 from simulator.beamformers.multirank_osp import MultiRankOSP
 from simulator.beamformers.gev import GEV
+from simulator.beamformers.iterative_lcmv import IterativeLCMV
 
 import tracemalloc
 
@@ -151,6 +152,12 @@ def run_scenario(scenario_name, target_sig, target_pos, interferer_sigs, interfe
     gev = GEV(pos_3d, fs)
     _, time_gev, score_gev, irr_gev, mem_gev = run_gridless_bss(gev, mix, fs)
     results.append({"Scenario": scenario_name, "Method": "GEV Gridless", "Harmonic_Score": score_gev, "IRR_dB": irr_gev, "Time (s)": time_gev, "Peak RAM (MB)": mem_gev})
+
+    # 8. Iterative LCMV (Peak Depletion)
+    print("  Running Iterative LCMV (Peak Depletion)...")
+    iter_lcmv = IterativeLCMV(pos_3d, fs, max_sources=4)
+    _, time_iter, score_iter, irr_iter, mem_iter = run_gridless_bss(iter_lcmv, mix, fs)
+    results.append({"Scenario": scenario_name, "Method": "Iterative LCMV (Peak Depletion)", "Harmonic_Score": score_iter, "IRR_dB": irr_iter, "Time (s)": time_iter, "Peak RAM (MB)": mem_iter})
 
     return results
 
