@@ -63,6 +63,7 @@ def init_worker(geo_file, fs, disable_lam):
     from simulator.beamformers.robust_phase import PhaseOnlyLCMV
     from simulator.beamformers.ilrma import ILRMA
     from simulator.beamformers.sve_lcmv import SVE_LCMV
+    from simulator.beamformers.fastiva import FastIVA
     WORKER_BEAMFORMERS = {
         "DAS": StandardDAS(pos_3d, fs),
         "Tapered_DAS": TaperedDAS(pos_3d, fs),
@@ -75,6 +76,8 @@ def init_worker(geo_file, fs, disable_lam):
         "MultiRank_OSP": MultiRankOSP(pos_3d, fs),
         "GSC_MCWF": GSC_MCWF(pos_3d, fs),
         "ILRMA": ILRMA(pos_3d, fs),
+        "FastIVA": FastIVA(pos_3d, fs),
+        "MR_LCMV": MultiRankOSP(pos_3d, fs),
         "SVE_LCMV": SVE_LCMV(pos_3d, fs)
     }
 
@@ -210,8 +213,13 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
                 np.sin(np.radians(el)),
             ]) * 120.0
 
+            import time
+            rtf = 0.0
             try:
+                t0 = time.perf_counter()
                 y_out = bf.process(audio, look_pos)
+                t1 = time.perf_counter()
+                rtf = (t1 - t0) / (audio.shape[1] / fs)
                 p_out = float(np.mean(y_out**2))
                 p_stor = phase_stor_cache[(az, el)]
                 lam_feats = get_lam_detectability(y_out, fs)
@@ -246,6 +254,7 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
                 "Elevation": el,
                 "Output_Power": p_out,
                 "Phase_STOR": p_stor,
+                "RTF": rtf,
             }
             res_dict.update(lam_feats)
             chunk_results.append(res_dict)
@@ -383,7 +392,7 @@ def main(args):
     metric_name = "Harmonic_Score" if args.disable_lam else "LAM_Detectability"
     report_md += "## Overall Algorithm Averages\n"
     report_md += "Note: **SSR_Depth_dB** (Spatial Suppression Ratio) measures how effectively the algorithm suppresses the target when steered away from it. A high SSR means deep nulls and high spatial selectivity (it doesn't listen to all angles).\n\n"
-    agg_cols = ["Output_Power", "Phase_STOR", metric_name, "TMPR_Grid", "SSR_Depth_dB"]
+    agg_cols = ["Output_Power", "Phase_STOR", metric_name, "TMPR_Grid", "SSR_Depth_dB", "RTF"]
     agg_cols = [c for c in agg_cols if c in df.columns]
     agg_df = df.groupby("Algorithm")[agg_cols].mean().reset_index()
     report_md += agg_df.to_markdown(index=False) + "\n\n"
@@ -443,3 +452,29 @@ if __name__ == "__main__":
 
     os.makedirs(args.input, exist_ok=True)
     main(args)
+
+def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
+    """
+    Cleans raw multichannel array data:
+    1. Removes static DC mean per channel.
+    2. Zero-phase high-pass filter (no phase shift).
+    3. Tapers boundary edges to suppress startup/teardown transients.
+    """
+    import numpy as np
+    import scipy.signal as signal
+
+    # 1. Demean each channel
+    audio = audio - np.mean(audio, axis=1, keepdims=True)
+
+    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
+    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
+    audio = signal.sosfiltfilt(sos, audio, axis=1)
+
+    # 3. Smooth fade-in and fade-out (Tukey window taper)
+    taper_samples = int((taper_ms / 1000.0) * fs)
+    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
+        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
+        audio[:, :taper_samples] *= fade
+        audio[:, -taper_samples:] *= fade[::-1]
+
+    return audio
