@@ -21,7 +21,7 @@ A common problem in real-world outdoor arrays is hardware variance—cheap micro
 
 ## Requirements
 ```bash
-pip install numpy scipy soundfile matplotlib pandas librosa tabulate tensorflow tensorflow-hub
+pip install numpy scipy soundfile matplotlib pandas librosa tabulate seaborn tensorflow tensorflow-hub
 ```
 
 ## How to Run

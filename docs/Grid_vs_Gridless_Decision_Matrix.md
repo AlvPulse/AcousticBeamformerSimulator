@@ -19,3 +19,22 @@ To assist stakeholders in selecting the correct spatial audio architecture for e
 
 ## QC & Validation Data
 All claims above are empirically backed by the synthetic and real-world benchmark datasets located in `docs/benchmark_gridless.csv` and validated by `experiments/qc_validation.py`. Under dense interference testing (1 Target + 3 Interferers), Gridless BSS (ILRMA) execution time doubled to ~13 seconds, whereas Grid LCMV execution time remained static at ~4.8 seconds, proving the Capacity limitations noted above.
+
+## Visual Engineering Analysis
+To provide a concrete comparison of these algorithms against the rigorous 1 Target + 3 Interferers environmental scenario, the benchmarking pipeline generates three distinct analysis plots found in the `docs/figures/` directory.
+
+### 1. Performance vs. Computation Time (Pareto Frontier)
+![Compute vs Quality](figures/compute_vs_quality.png)
+This scatter plot highlights the trade-off between the Harmonic Score (target quality preservation) and the Execution Time (s).
+*   **Ideal Quadrant:** Top-Left (Fast Execution, High Quality).
+*   **Observation:** `AuxIVA` resides strictly in the ideal quadrant compared to standard Grid Search methods, which suffer from long loop delays.
+
+### 2. Interference Rejection Ratio (IRR)
+![Interference Rejection](figures/interference_rejection.png)
+A comparative bar chart illustrating the "Nulling Depth" of each method across single and multiple interferer conditions.
+*   **Observation:** `MR-LCMV (OSP)` offers the deepest spatial nulls, heavily penalizing interferers via signal subspace projection.
+
+### 3. Peak RAM Consumption
+![Peak RAM](figures/peak_ram_usage.png)
+A breakdown of the maximum memory allocated during processing, critical for edge-device deployment.
+*   **Observation:** Gridless methods (like `ILRMA`) require caching large dense multi-dimensional non-negative matrices for iterative factorization, scaling worse than strict frame-by-frame Grid Search methods in RAM-constrained environments.
