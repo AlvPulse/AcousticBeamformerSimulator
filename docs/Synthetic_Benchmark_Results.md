@@ -43,20 +43,20 @@ Measures Delta SI-SDR (Scale-Invariant Signal-to-Distortion Ratio) and Real-Time
 - **ILRMA** provides unmatched acoustic filtering (SI-SDR) in extreme wind and multipath environments, but its RTF of ~4.8 makes it unsuitable for low-latency embedded deployment.
 - **SVE-LCMV** achieves excellent robust filtering and avoids the self-cancellation issues of DL-LCMV, while maintaining an RTF of 0.25 (real-time capable).
 
-## 4. Comprehensive Gridless BSS vs Grid-Search Evaluation
+## 3. Comprehensive Gridless BSS vs Grid-Search Evaluation
 Evaluated via `experiments/benchmark_gridless.py`.
-Comparing execution time and interference rejection across various Gridless and Grid Search methods.
+Comparing execution time, memory usage, and interference rejection across various Gridless and Grid Search methods. Evaluated on 1 Target + 1 Interferer.
 
-| Method | Harmonic Score | IRR dB (Interference Rejection) | Execution Time (s) |
-|:---|:---:|:---:|:---:|
-| **LCMV Grid Search** (64 pts) | -43.96 | 9.60 dB | 1.89 s |
-| **SVE-LCMV Grid Search** (64 pts) | -12.58 | 1.02 dB | 3.66 s |
-| **MR-LCMV (OSP) Grid Search** (64 pts) | -23.62 | 22.57 dB | 5.54 s |
-| **ILRMA Gridless** (20 iters) | -11.31 | 7.59 dB | 1.59 s |
-| **AuxIVA Gridless** (20 iters) | -15.35 | 9.49 dB | 0.72 s |
-| **FastIVA Gridless** (15 iters) | -117.62* | -25.09 dB* | 0.48 s |
+| Method | Harmonic Score | IRR dB (Interference Rejection) | Execution Time (s) | Peak RAM (MB) |
+|:---|:---:|:---:|:---:|:---:|
+| **LCMV Grid Search** (64 pts) | -47.53 | 9.30 dB | 4.87 s | 5.59 |
+| **SVE-LCMV Grid Search** (64 pts) | -16.08 | 1.04 dB | 11.87 s | 5.57 |
+| **MR-LCMV (OSP) Grid Search** (64 pts) | -15.00 | 12.40 dB | 18.45 s | 5.56 |
+| **ILRMA Gridless** (n=4) | -15.95 | 7.57 dB | 12.29 s | 5.89 |
+| **AuxIVA Gridless** (n=4) | -15.90 | 8.95 dB | 6.86 s | 5.28 |
+| **FastIVA Gridless** (n=4) | -21.90* | -10.96 dB* | 4.78 s | 5.73 |
 
 **Verdict:**
-- **AuxIVA** is the most optimal Gridless method. It completely rejects the interference (9.49 dB) and preserves the target quality (-15.35), while running extremely fast (0.72s).
-- **MR-LCMV (Multi-Rank OSP)** offers immense interference rejection (22.57 dB) due to signal subspace projection, but because it relies on iterative Grid Searching, its computational burden (5.54s) makes it unsuitable for real-time applications compared to AuxIVA.
-- *(Note: FastIVA suffers from amplitude scaling explosion due to Gram-Schmidt instability on small channel counts in this specific setup, despite its fast 0.48s execution time).*
+- **AuxIVA** is the most optimal Gridless method. It completely rejects the interference (8.95 dB) and preserves the target quality (-15.90), while running roughly twice as fast as ILRMA.
+- **MR-LCMV (Multi-Rank OSP)** offers immense interference rejection (12.40 dB) due to signal subspace projection, but because it relies on iterative Grid Searching, its computational burden (18.45s) makes it unsuitable for real-time applications compared to AuxIVA.
+- *(Note: FastIVA suffers from amplitude scaling explosion due to Gram-Schmidt instability on small channel counts in this specific setup).*
