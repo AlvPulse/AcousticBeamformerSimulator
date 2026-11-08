@@ -49,14 +49,14 @@ Comparing execution time, memory usage, and interference rejection across variou
 
 | Method | Harmonic Score | IRR dB (Interference Rejection) | Execution Time (s) | Peak RAM (MB) |
 |:---|:---:|:---:|:---:|:---:|
-| **LCMV Grid Search** (64 pts) | -47.53 | 9.30 dB | 4.87 s | 5.59 |
-| **SVE-LCMV Grid Search** (64 pts) | -16.08 | 1.04 dB | 11.87 s | 5.57 |
-| **MR-LCMV (OSP) Grid Search** (64 pts) | -15.00 | 12.40 dB | 18.45 s | 5.56 |
-| **ILRMA Gridless** (n=4) | -15.95 | 7.57 dB | 12.29 s | 5.89 |
-| **AuxIVA Gridless** (n=4) | -15.90 | 8.95 dB | 6.86 s | 5.28 |
-| **FastIVA Gridless** (n=4) | -21.90* | -10.96 dB* | 4.78 s | 5.73 |
+| **LCMV Grid Search** (64 pts) | -46.54 | 8.38 dB | 4.85 s | 5.60 |
+| **SVE-LCMV Grid Search** (64 pts) | -16.79 | 0.99 dB | 13.87 s | 5.57 |
+| **MR-LCMV (OSP) Grid Search** (64 pts) | -17.49 | 17.95 dB | 18.43 s | 5.56 |
+| **ILRMA Gridless** (n=4) | -14.86 | 7.39 dB | 12.32 s | 5.89 |
+| **AuxIVA Gridless** (n=4) | -14.09 | 8.78 dB | 6.88 s | 5.28 |
+| **GEV Gridless** (Max-SNR) | -50.01 | -29.68 dB | 0.19 s | 5.28 |
 
 **Verdict:**
-- **AuxIVA** is the most optimal Gridless method. It completely rejects the interference (8.95 dB) and preserves the target quality (-15.90), while running roughly twice as fast as ILRMA.
-- **MR-LCMV (Multi-Rank OSP)** offers immense interference rejection (12.40 dB) due to signal subspace projection, but because it relies on iterative Grid Searching, its computational burden (18.45s) makes it unsuitable for real-time applications compared to AuxIVA.
-- *(Note: FastIVA suffers from amplitude scaling explosion due to Gram-Schmidt instability on small channel counts in this specific setup).*
+- **AuxIVA** is the most optimal Gridless method. It rejects the interference (8.78 dB) and preserves target quality (-14.09), while running significantly faster than ILRMA.
+- **GEV (Generalized Eigenvalue)** is phenomenally fast (0.19s, perfectly gridless) but fails to separate signals effectively in this dense scenario because it lacks the statistical independence modeling of AuxIVA.
+- **MR-LCMV (Multi-Rank OSP)** offers immense interference rejection (17.95 dB) due to signal subspace projection, but because it relies on iterative Grid Searching, its computational burden (18.43s) makes it unsuitable for real-time applications compared to AuxIVA.

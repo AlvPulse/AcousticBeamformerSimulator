@@ -15,6 +15,7 @@ from simulator.beamformers.aux_iva import AuxIVA
 from simulator.beamformers.fast_iva import FastIVA
 from simulator.beamformers.sve_lcmv import SVE_LCMV
 from simulator.beamformers.multirank_osp import MultiRankOSP
+from simulator.beamformers.gev import GEV
 
 import tracemalloc
 
@@ -143,6 +144,13 @@ def run_scenario(scenario_name, target_sig, target_pos, interferer_sigs, interfe
     fastiva = FastIVA(pos_3d, fs, n_components=4, n_iter=15)
     _, time_fast, score_fast, irr_fast, mem_fast = run_gridless_bss(fastiva, mix, fs)
     results.append({"Scenario": scenario_name, "Method": "FastIVA Gridless (n=4)", "Harmonic_Score": score_fast, "IRR_dB": irr_fast, "Time (s)": time_fast, "Peak RAM (MB)": mem_fast})
+
+    # 7. GEV Gridless (Max-SNR)
+    # GEV is intrinsically gridless because it extracts the dominant eigenvector from the covariance matrix.
+    print("  Running GEV (Gridless)...")
+    gev = GEV(pos_3d, fs)
+    _, time_gev, score_gev, irr_gev, mem_gev = run_gridless_bss(gev, mix, fs)
+    results.append({"Scenario": scenario_name, "Method": "GEV Gridless", "Harmonic_Score": score_gev, "IRR_dB": irr_gev, "Time (s)": time_gev, "Peak RAM (MB)": mem_gev})
 
     return results
 
