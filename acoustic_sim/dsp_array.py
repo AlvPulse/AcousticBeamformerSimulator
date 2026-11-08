@@ -64,15 +64,24 @@ def load_array(filepath) -> ArrayGeometry:
     ext = os.path.splitext(filepath)[1].lower()
 
     if ext == '.csv':
-        # Load CSV using pandas, assuming either no header or standard numeric columns
-        # We will attempt to read it and extract the first two columns
+        # Load CSV using pandas
+        # Need to support shape variations:
+        # (N_sensors rows x 3 columns) OR (3 rows x N_sensors columns)
         try:
             df = pd.read_csv(filepath, header=None)
-            # If the CSV has headers like x, y, Z, we should try to drop non-numeric rows or use headers
-            # A simple approach for arbitrary CSVs is to drop any rows that contain NaNs in the first two cols
-            df = df.apply(pd.to_numeric, errors='coerce').dropna(subset=[0, 1])
-            x_vals = df.iloc[:, 0].tolist()
-            y_vals = df.iloc[:, 1].tolist()
+            df = df.apply(pd.to_numeric, errors='coerce')
+            df = df.dropna(how='all') # drop fully empty rows
+
+            if df.shape[0] == 3 and df.shape[1] > 3:
+                # Format is 3 rows (X, Y, Z) and N columns (sensors)
+                x_vals = df.iloc[0, :].tolist()
+                y_vals = df.iloc[1, :].tolist()
+            else:
+                # Format is N rows (sensors) and >=2 columns (X, Y, ...)
+                df = df.dropna(subset=[0, 1])
+                x_vals = df.iloc[:, 0].tolist()
+                y_vals = df.iloc[:, 1].tolist()
+
             return ArrayGeometry(x_vals, y_vals)
         except Exception as e:
             raise ValueError(f"Failed to parse CSV array geometry: {e}")
