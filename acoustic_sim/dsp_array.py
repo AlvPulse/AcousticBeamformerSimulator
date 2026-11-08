@@ -1,17 +1,24 @@
 import numpy as np
 
 class ArrayGeometry:
-    def __init__(self, x, y):
+    def __init__(self, x, y, z=None):
         self.x = np.array(x)
         self.y = np.array(y)
         self.n_sensors = len(self.x)
         if len(self.y) != self.n_sensors:
             raise ValueError("x and y arrays must have the same length")
 
+        if z is not None:
+            self.z = np.array(z)
+            if len(self.z) != self.n_sensors:
+                raise ValueError("z array must have the same length as x and y")
+        else:
+            self.z = np.zeros(self.n_sensors)
+
         # Center the array
         self.x -= np.mean(self.x)
         self.y -= np.mean(self.y)
-        self.z = np.zeros(self.n_sensors) # z = 0 (Planar array)
+        self.z -= np.mean(self.z)
         self.positions = np.column_stack((self.x, self.y, self.z))
 
     def get_spatial_weights(self, window_type="none"):
@@ -50,12 +57,60 @@ class ArrayGeometry:
 import ast
 
 def load_array(filepath) -> ArrayGeometry:
+    """
+    Loads array geometry from a file.
+    Supports:
+    1. .csv format: rows of coordinates. We extract the first two columns as x and y.
+    2. .txt format: expects format like x=[...] and y=[...]
+    """
+    import os
     import re
     import ast
+    import pandas as pd
+
+    ext = os.path.splitext(filepath)[1].lower()
+
+    if ext == '.csv':
+        # Load CSV using pandas
+        # Need to support shape variations:
+        # (N_sensors rows x 3 columns) OR (3 rows x N_sensors columns)
+        try:
+            df = pd.read_csv(filepath, header=None)
+            df = df.apply(pd.to_numeric, errors='coerce')
+            df = df.dropna(how='all') # drop fully empty rows
+
+            if df.shape[0] == 3 and df.shape[1] > 3:
+                # Format is 3 rows (X, Y, Z) and N columns (sensors)
+                x_vals = df.iloc[0, :].tolist()
+                y_vals = df.iloc[1, :].tolist()
+                z_vals = df.iloc[2, :].tolist()
+            else:
+                # Format is N rows (sensors) and >=2 columns (X, Y, ...)
+                df = df.dropna(subset=[0, 1])
+                x_vals = df.iloc[:, 0].tolist()
+                y_vals = df.iloc[:, 1].tolist()
+                z_vals = df.iloc[:, 2].tolist() if df.shape[1] > 2 else np.zeros(len(x_vals)).tolist()
+
+            return ArrayGeometry(x_vals, y_vals, z_vals)
+        except Exception as e:
+            raise ValueError(f"Failed to parse CSV array geometry: {e}")
+
+    # Fallback to standard .txt parsing (or if the .txt is actually tab-separated values)
+    try:
+        df = pd.read_csv(filepath, header=None, sep=r'\s+')
+        df = df.apply(pd.to_numeric, errors='coerce')
+        df = df.dropna(how='all')
+        if df.shape[0] == 3 and df.shape[1] > 3:
+            x_vals = df.iloc[0, :].tolist()
+            y_vals = df.iloc[1, :].tolist()
+            z_vals = df.iloc[2, :].tolist()
+            return ArrayGeometry(x_vals, y_vals, z_vals)
+    except Exception:
+        pass
+
     with open(filepath, 'r') as f:
         content = f.read()
 
-    # Try parsing old format (x=[...], y=[...])
     x_match = re.search(r'x\s*=\s*(\[.*?\])', content, flags=re.DOTALL)
     y_match = re.search(r'y\s*=\s*(\[.*?\])', content, flags=re.DOTALL)
     z_match = re.search(r'z\s*=\s*(\[.*?\])', content, flags=re.DOTALL)
@@ -65,37 +120,15 @@ def load_array(filepath) -> ArrayGeometry:
         y_str = re.sub(r'\s+', '', y_match.group(1))
         x_vals = ast.literal_eval(x_str)
         y_vals = ast.literal_eval(y_str)
-
-        geo = ArrayGeometry(x_vals, y_vals)
         if z_match:
             z_str = re.sub(r'\s+', '', z_match.group(1))
             z_vals = ast.literal_eval(z_str)
-            geo.z = np.array(z_vals)
-            geo.positions = np.column_stack((geo.x, geo.y, geo.z))
+        else:
+            z_vals = np.zeros(len(x_vals)).tolist()
+    else:
+        raise ValueError(f"Could not parse x and y coordinates from {filepath}")
 
-        return geo
-
-    # Try parsing CSV tab-separated format
-    lines = content.strip().split('\n')
-    if len(lines) >= 2:
-        try:
-            x_vals = [float(v) for v in lines[0].strip().split()]
-            y_vals = [float(v) for v in lines[1].strip().split()]
-
-            geo = ArrayGeometry(x_vals, y_vals)
-
-            if len(lines) >= 3 and lines[2].strip():
-                z_vals = [float(v) for v in lines[2].strip().split()]
-                if len(z_vals) == len(x_vals):
-                    geo.z = np.array(z_vals)
-                    geo.positions = np.column_stack((geo.x, geo.y, geo.z))
-
-            return geo
-        except Exception as e:
-            raise ValueError(f"Could not parse x and y coordinates from {filepath}: {e}")
-
-    raise ValueError(f"Could not parse x and y coordinates from {filepath}")
-
+    return ArrayGeometry(x_vals, y_vals, z_vals)
 
 def aliasing_frequency(array: ArrayGeometry, c=343.0) -> float:
     """

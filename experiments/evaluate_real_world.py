@@ -63,9 +63,13 @@ def init_worker(geo_file, fs, disable_lam):
     from simulator.beamformers.robust_phase import PhaseOnlyLCMV
     from simulator.beamformers.ilrma import ILRMA
     from simulator.beamformers.sve_lcmv import SVE_LCMV
-    from simulator.beamformers.fastiva import FastIVA
+    from simulator.beamformers.aux_iva import AuxIVA
+    from simulator.beamformers.fast_iva import FastIVA
+    from simulator.beamformers.gev import GEV
+    from simulator.beamformers.iterative_lcmv import IterativeLCMV
     from simulator.beamformers.music import MUSIC
     from simulator.beamformers.srp_phat import SRP_PHAT
+
     WORKER_BEAMFORMERS = {
         "MUSIC": MUSIC(pos_3d, fs),
         "SRP_PHAT": SRP_PHAT(pos_3d, fs),
@@ -79,10 +83,13 @@ def init_worker(geo_file, fs, disable_lam):
         "EBB": EBB(pos_3d, fs),
         "MultiRank_OSP": MultiRankOSP(pos_3d, fs),
         "GSC_MCWF": GSC_MCWF(pos_3d, fs),
+        "SVE_LCMV": SVE_LCMV(pos_3d, fs),
+        "Iterative_LCMV": IterativeLCMV(pos_3d, fs),
+        # Gridless Methods
         "ILRMA": ILRMA(pos_3d, fs),
+        "AuxIVA": AuxIVA(pos_3d, fs),
         "FastIVA": FastIVA(pos_3d, fs),
-        "MR_LCMV": MultiRankOSP(pos_3d, fs),
-        "SVE_LCMV": SVE_LCMV(pos_3d, fs)
+        "GEV": GEV(pos_3d, fs)
     }
 
     # 3. Load AST model once (if not disabled)
@@ -206,11 +213,65 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
     els = [p[1] for p in grid]
 
     for bf_name, bf in WORKER_BEAMFORMERS.items():
-        energy_map, lam_map, phase_stor_map = [], [], []
+        energy_map = []
+        lam_map = []
+        phase_stor_map = []
+        azs = []
+        els = []
+
         audio_out_dir = os.path.join(out_dir, bf_name)
         os.makedirs(audio_out_dir, exist_ok=True)
 
+        is_gridless = bf_name in ["ILRMA", "AuxIVA", "FastIVA", "GEV", "Iterative_LCMV"]
+
+        if is_gridless:
+            # Process exactly once for Gridless methods
+            import time
+            rtf = 0.0
+            try:
+                t0 = time.perf_counter()
+                y_out = bf.process(audio)
+                t1 = time.perf_counter()
+                rtf = (t1 - t0) / (audio.shape[1] / fs)
+                p_out = float(np.mean(y_out**2))
+                lam_feats = get_lam_detectability(y_out, fs)
+
+                if DISABLE_LAM:
+
+                    y_out_clean = clean_multichannel_audio(y_out[np.newaxis, :], fs=fs)
+                    y_out = np.squeeze(y_out_clean)
+
+                y_out_scaled = y_out * 2e2
+
+                sf.write(
+                    os.path.join(audio_out_dir, f"audio_gridless.wav"),
+                    y_out_scaled,
+                    fs,
+                )
+            except Exception as e:
+                p_out = 0.0
+                lam_feats = {}
+
+            res_dict = {
+                "Folder": test_name,
+                "Chunk": chunk_name,
+                "Algorithm": bf_name,
+                "Azimuth": 0.0,
+                "Elevation": 0.0,
+                "Output_Power": p_out,
+                "Phase_STOR": 0.0,
+                "TMPR_Grid": 0.0,
+                "SSR_Depth_dB": 0.0, # IRR is calculated elsewhere for gridless
+            "RTF": rtf
+            }
+            res_dict.update(lam_feats)
+            chunk_results.append(res_dict)
+            continue
+
         for az, el in grid:
+            azs.append(az)
+            els.append(el)
+
             look_pos = np.array([
                 np.cos(np.radians(el)) * np.cos(np.radians(az)),
                 np.cos(np.radians(el)) * np.sin(np.radians(az)),
@@ -230,6 +291,7 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
                 # Output formatting logic with explicit AGC parameter check
                 if DISABLE_LAM:
+
                     # clean_multichannel_audio expects (channels, samples), so expand and squeeze
                     y_out_clean = clean_multichannel_audio(y_out[np.newaxis, :], fs=fs)
                     y_out = np.squeeze(y_out_clean)
@@ -258,7 +320,7 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
                 "Elevation": el,
                 "Output_Power": p_out,
                 "Phase_STOR": p_stor,
-                "RTF": rtf,
+            "RTF": rtf,
             }
             res_dict.update(lam_feats)
             chunk_results.append(res_dict)
@@ -296,14 +358,8 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         median_power = float(np.median(energy_map))
         max_power = float(np.max(energy_map))
         min_power = float(np.min(energy_map))
-
-        # Protect against taking log of zero or negative from floating point issues
-        median_power = max(1e-12, median_power)
-        max_power = max(1e-12, max_power)
-        min_power = max(1e-12, min_power)
-
-        tmpr = 10 * np.log10(max_power / median_power)
-        ssr = 10 * np.log10(max_power / min_power) # Spatial Suppression Ratio (Nulling Depth)
+        tmpr = 10 * np.log10(max_power / (median_power + 1e-12))
+        ssr = 10 * np.log10(max_power / (min_power + 1e-12)) # Spatial Suppression Ratio (Nulling Depth)
         for idx in range(len(grid)):
             chunk_results[len(chunk_results) - len(grid) + idx]["TMPR_Grid"] = tmpr
             chunk_results[len(chunk_results) - len(grid) + idx]["SSR_Depth_dB"] = ssr
@@ -315,6 +371,39 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         chunk_df.to_csv(chunk_csv_path, index=False)
 
     return chunk_results
+
+
+
+
+
+
+
+
+def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
+    """
+    Cleans raw multichannel array data:
+    1. Removes static DC mean per channel.
+    2. Zero-phase high-pass filter (no phase shift).
+    3. Tapers boundary edges to suppress startup/teardown transients.
+    """
+    import numpy as np
+    import scipy.signal as signal
+
+    # 1. Demean each channel
+    audio = audio - np.mean(audio, axis=1, keepdims=True)
+
+    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
+    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
+    audio = signal.sosfiltfilt(sos, audio, axis=1)
+
+    # 3. Smooth fade-in and fade-out (Tukey window taper)
+    taper_samples = int((taper_ms / 1000.0) * fs)
+    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
+        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
+        audio[:, :taper_samples] *= fade
+        audio[:, -taper_samples:] *= fade[::-1]
+
+    return audio
 
 
 def main(args):
@@ -417,38 +506,16 @@ def main(args):
     print(f"Aggregate Markdown Report saved to {report_path}")
 
 
-def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
-    """
-    Cleans raw multichannel array data:
-    1. Removes static DC mean per channel.
-    2. Zero-phase high-pass filter (no phase shift).
-    3. Tapers boundary edges to suppress startup/teardown transients.
-    """
-    # 1. Demean each channel
-    audio = audio - np.mean(audio, axis=1, keepdims=True)
-
-    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
-    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
-    audio = signal.sosfiltfilt(sos, audio, axis=1)
-
-    # 3. Smooth fade-in and fade-out (Tukey window taper)
-    taper_samples = int((taper_ms / 1000.0) * fs)
-    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
-        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
-        audio[:, :taper_samples] *= fade
-        audio[:, -taper_samples:] *= fade[::-1]
-
-    return audio
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default="data/field_tests")
     parser.add_argument("--output", default="docs/real_world_outputs")
-    parser.add_argument("--grid_points", type=int, default=4)
+    parser.add_argument("--grid_points", type=int, default=8)
     parser.add_argument("--geo_file", default="array_geo.txt")
     parser.add_argument("--single_smoke_test", action="store_true")
-    parser.add_argument("--num_chunks", type=int, default=1, help="Number of chunks per folder. 0 = all.")
+    parser.add_argument("--num_chunks", type=int, default=0, help="Number of chunks per folder. 0 = all.")
     parser.add_argument("--apply_agc", action="store_true", help="Apply automatic gain control to output audios")
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1), help="Number of worker processes.")
     parser.add_argument("--disable_lam", action="store_true", help="Disable heavy LAM (AST) and use harmonic features instead")
@@ -456,29 +523,3 @@ if __name__ == "__main__":
 
     os.makedirs(args.input, exist_ok=True)
     main(args)
-
-def clean_multichannel_audio(audio, fs=16000, cutoff_hz=200.0, taper_ms=50):
-    """
-    Cleans raw multichannel array data:
-    1. Removes static DC mean per channel.
-    2. Zero-phase high-pass filter (no phase shift).
-    3. Tapers boundary edges to suppress startup/teardown transients.
-    """
-    import numpy as np
-    import scipy.signal as signal
-
-    # 1. Demean each channel
-    audio = audio - np.mean(audio, axis=1, keepdims=True)
-
-    # 2. Zero-phase High-Pass Filter (4th-order Butterworth)
-    sos = signal.butter(4, cutoff_hz, btype='highpass', fs=fs, output='sos')
-    audio = signal.sosfiltfilt(sos, audio, axis=1)
-
-    # 3. Smooth fade-in and fade-out (Tukey window taper)
-    taper_samples = int((taper_ms / 1000.0) * fs)
-    if taper_samples > 0 and audio.shape[1] > 2 * taper_samples:
-        fade = 0.5 * (1 - np.cos(np.linspace(0, np.pi, taper_samples)))
-        audio[:, :taper_samples] *= fade
-        audio[:, -taper_samples:] *= fade[::-1]
-
-    return audio
