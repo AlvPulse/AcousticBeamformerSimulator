@@ -64,7 +64,11 @@ def init_worker(geo_file, fs, disable_lam):
     from simulator.beamformers.ilrma import ILRMA
     from simulator.beamformers.sve_lcmv import SVE_LCMV
     from simulator.beamformers.fastiva import FastIVA
+    from simulator.beamformers.music import MUSIC
+    from simulator.beamformers.srp_phat import SRP_PHAT
     WORKER_BEAMFORMERS = {
+        "MUSIC": MUSIC(pos_3d, fs),
+        "SRP_PHAT": SRP_PHAT(pos_3d, fs),
         "DAS": StandardDAS(pos_3d, fs),
         "Tapered_DAS": TaperedDAS(pos_3d, fs),
         "LCMV": LCMVSMI(pos_3d, fs),
