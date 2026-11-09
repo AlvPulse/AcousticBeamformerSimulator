@@ -18,6 +18,15 @@ from simulator.beamformers.gev import GEV
 from simulator.beamformers.multirank_osp import MultiRankOSP
 from simulator.beamformers.gsc_mcwf import GSC_MCWF
 from simulator.beamformers.robust_phase import PhaseOnlyLCMV
+from simulator.beamformers.music import MUSIC
+from simulator.beamformers.srp_phat import SRP_PHAT
+from simulator.beamformers.incm_mvdr import INCM_MVDR
+from simulator.beamformers.das import StandardDAS
+from simulator.beamformers.tapered_das import TaperedDAS
+from simulator.beamformers.robust_lcmv import RobustLCMV
+from simulator.beamformers.robust_socp import RobustSOCP
+from simulator.beamformers.ebb import EBB
+from simulator.beamformers.cgmm_mvdr import cGMM_MVDR
 
 def calculate_fraunhofer_distance(pos_mics, max_freq=4000.0, c=343.0):
     """
@@ -64,11 +73,20 @@ def run_nearfield_masking_benchmark():
     print("Any source closer than this distance will cause spherical plane-wave distortion.")
 
     beamformers = {
+        "Standard DAS": (StandardDAS(pos_3d, fs), False),
+        "Tapered_DAS": (TaperedDAS(pos_3d, fs), False),
         "Gen1_LCMV": (LCMVSMI(pos_3d, fs), False),
+        "MUSIC": (MUSIC(pos_3d, fs), False),
+        "SRP_PHAT": (SRP_PHAT(pos_3d, fs), False),
         "PhaseOnlyLCMV": (PhaseOnlyLCMV(pos_3d, fs), False),
+        "RobustLCMV": (RobustLCMV(pos_3d, fs), False),
+        "RobustSOCP": (RobustSOCP(pos_3d, fs), False),
+        "EBB": (EBB(pos_3d, fs), False),
+        "cGMM_MVDR": (cGMM_MVDR(pos_3d, fs), False),
         "GSC_MCWF": (GSC_MCWF(pos_3d, fs), False),
         "MultiRankOSP": (MultiRankOSP(pos_3d, fs), False),
         "SVE_LCMV": (SVE_LCMV(pos_3d, fs), False),
+        "INCM_MVDR": (INCM_MVDR(pos_3d, fs), False),
         "Iterative_LCMV": (IterativeLCMV(pos_3d, fs, max_sources=3), False),
         "AuxIVA": (AuxIVA(pos_3d, fs, n_components=2, n_iter=15), True),
         "FastIVA": (FastIVA(pos_3d, fs, n_components=2, n_iter=15), True),

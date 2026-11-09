@@ -9,11 +9,22 @@ from simulator.acoustics.scene_generator import synthesize_scene
 from simulator.beamformers.lcmv_smi import LCMVSMI
 from simulator.beamformers.sve_lcmv import SVE_LCMV
 from simulator.beamformers.iterative_lcmv import IterativeLCMV
+from simulator.beamformers.ilrma import ILRMA
 from simulator.beamformers.aux_iva import AuxIVA
 from simulator.beamformers.fast_iva import FastIVA
 from simulator.beamformers.incm_mvdr import INCM_MVDR
 from simulator.beamformers.multirank_osp import MultiRankOSP
 from simulator.beamformers.gev import GEV
+from simulator.beamformers.music import MUSIC
+from simulator.beamformers.srp_phat import SRP_PHAT
+from simulator.beamformers.das import StandardDAS
+from simulator.beamformers.tapered_das import TaperedDAS
+from simulator.beamformers.robust_phase import PhaseOnlyLCMV
+from simulator.beamformers.robust_lcmv import RobustLCMV
+from simulator.beamformers.robust_socp import RobustSOCP
+from simulator.beamformers.ebb import EBB
+from simulator.beamformers.cgmm_mvdr import cGMM_MVDR
+from simulator.beamformers.gsc_mcwf import GSC_MCWF
 from experiments.benchmark_calibration_breakdown import get_harmonic_score
 
 # --- Real-World Audio Simulators ---
@@ -108,11 +119,22 @@ def run_massive_sweep():
     pos_3d = np.stack([np.cos(angles), np.sin(angles), np.zeros(8)], axis=1)
 
     beamformers = {
+        "Standard DAS": (StandardDAS(pos_3d, fs), False),
+        "Tapered_DAS": (TaperedDAS(pos_3d, fs), False),
         "Gen1_LCMV": (LCMVSMI(pos_3d, fs), False),
+        "MUSIC": (MUSIC(pos_3d, fs), False),
+        "SRP_PHAT": (SRP_PHAT(pos_3d, fs), False),
+        "PhaseOnlyLCMV": (PhaseOnlyLCMV(pos_3d, fs), False),
+        "RobustLCMV": (RobustLCMV(pos_3d, fs), False),
+        "RobustSOCP": (RobustSOCP(pos_3d, fs), False),
+        "EBB": (EBB(pos_3d, fs), False),
+        "cGMM_MVDR": (cGMM_MVDR(pos_3d, fs), False),
+        "GSC_MCWF": (GSC_MCWF(pos_3d, fs), False),
         "Gen2_SVE-LCMV": (SVE_LCMV(pos_3d, fs), False),
         "Gen2_Iterative-LCMV": (IterativeLCMV(pos_3d, fs, max_sources=3), False),
         "Gen2_INCM-MVDR": (INCM_MVDR(pos_3d, fs), False),
         "Gen2_MR-LCMV": (MultiRankOSP(pos_3d, fs), False),
+        "Gen3_ILRMA": (ILRMA(pos_3d, fs, n_components=3, n_iter=15), True),
         "Gen3_AuxIVA": (AuxIVA(pos_3d, fs, n_components=3, n_iter=15), True),
         "Gen3_FastIVA": (FastIVA(pos_3d, fs, n_components=3, n_iter=15), True),
         "Gen3_GEV": (GEV(pos_3d, fs), True)

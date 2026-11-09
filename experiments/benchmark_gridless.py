@@ -18,6 +18,16 @@ from simulator.beamformers.multirank_osp import MultiRankOSP
 from simulator.beamformers.gev import GEV
 from simulator.beamformers.iterative_lcmv import IterativeLCMV
 from simulator.beamformers.incm_mvdr import INCM_MVDR
+from simulator.beamformers.music import MUSIC
+from simulator.beamformers.srp_phat import SRP_PHAT
+from simulator.beamformers.das import StandardDAS
+from simulator.beamformers.tapered_das import TaperedDAS
+from simulator.beamformers.robust_phase import PhaseOnlyLCMV
+from simulator.beamformers.robust_lcmv import RobustLCMV
+from simulator.beamformers.robust_socp import RobustSOCP
+from simulator.beamformers.ebb import EBB
+from simulator.beamformers.cgmm_mvdr import cGMM_MVDR
+from simulator.beamformers.gsc_mcwf import GSC_MCWF
 
 import tracemalloc
 
@@ -165,6 +175,18 @@ def run_scenario(scenario_name, target_sig, target_pos, interferer_sigs, interfe
     incm = INCM_MVDR(pos_3d, fs)
     _, time_incm, score_incm, irr_incm, mem_incm = run_grid_search(incm, mix, fs, grid_size=64)
     results.append({"Scenario": scenario_name, "Method": "INCM-MVDR Grid (64 pts)", "Harmonic_Score": score_incm, "IRR_dB": irr_incm, "Time (s)": time_incm, "Peak RAM (MB)": mem_incm})
+
+    # 10. MUSIC Grid Search (Classical Baseline)
+    print("  Running MUSIC Grid Search (64 points)...")
+    music = MUSIC(pos_3d, fs)
+    _, time_music, score_music, irr_music, mem_music = run_grid_search(music, mix, fs, grid_size=64)
+    results.append({"Scenario": scenario_name, "Method": "MUSIC Grid (64 pts)", "Harmonic_Score": score_music, "IRR_dB": irr_music, "Time (s)": time_music, "Peak RAM (MB)": mem_music})
+
+    # 11. SRP-PHAT Grid Search (Classical Baseline)
+    print("  Running SRP-PHAT Grid Search (64 points)...")
+    srp = SRP_PHAT(pos_3d, fs)
+    _, time_srp, score_srp, irr_srp, mem_srp = run_grid_search(srp, mix, fs, grid_size=64)
+    results.append({"Scenario": scenario_name, "Method": "SRP-PHAT Grid (64 pts)", "Harmonic_Score": score_srp, "IRR_dB": irr_srp, "Time (s)": time_srp, "Peak RAM (MB)": mem_srp})
 
     return results
 

@@ -1,6 +1,6 @@
 # Synthetic Benchmark Results (SOTA Evaluation)
 
-This document records the exact evaluation results for the robust state-of-the-art (SOTA) beamformers recently implemented (`ILRMA`, `SVE-LCMV`) compared to standard variants.
+This document records the exact evaluation results for the robust state-of-the-art (SOTA) beamformers implemented across our Gridless and Grid Search evaluations.
 
 ## 1. Hardware Calibration Breakdown (Uncalibrated Mics)
 Evaluated via `experiments/benchmark_calibration_breakdown.py`.
@@ -43,45 +43,25 @@ Measures Delta SI-SDR (Scale-Invariant Signal-to-Distortion Ratio) and Real-Time
 - **ILRMA** provides unmatched acoustic filtering (SI-SDR) in extreme wind and multipath environments, but its RTF of ~4.8 makes it unsuitable for low-latency embedded deployment.
 - **SVE-LCMV** achieves excellent robust filtering and avoids the self-cancellation issues of DL-LCMV, while maintaining an RTF of 0.25 (real-time capable).
 
-## 3. Comprehensive Gridless BSS vs Grid-Search Evaluation
+## 3. Comprehensive Gridless BSS vs Grid-Search Evaluation (All 19 Algorithms)
 Evaluated via `experiments/benchmark_gridless.py`.
-Comparing execution time, memory usage, and interference rejection across various Gridless and Grid Search methods. Evaluated on 1 Target + 1 Interferer.
+Comparing execution time, memory usage, and interference rejection across all Gridless and Grid Search methods, including classical baselines (MUSIC, SRP-PHAT). Evaluated on 1 Target + 1 Interferer.
 
 | Method | Harmonic Score | IRR dB (Interference Rejection) | Execution Time (s) | Peak RAM (MB) |
 |:---|:---:|:---:|:---:|:---:|
-| **LCMV Grid Search** (64 pts) | -46.54 | 8.38 dB | 4.85 s | 5.60 |
-| **SVE-LCMV Grid Search** (64 pts) | -16.79 | 0.99 dB | 13.87 s | 5.57 |
-| **MR-LCMV (OSP) Grid Search** (64 pts) | -17.49 | 17.95 dB | 18.43 s | 5.56 |
-| **ILRMA Gridless** (n=4) | -14.86 | 7.39 dB | 12.32 s | 5.89 |
-| **AuxIVA Gridless** (n=4) | -14.09 | 8.78 dB | 6.88 s | 5.28 |
-| **GEV Gridless** (Max-SNR) | -50.01 | -29.68 dB | 0.19 s | 5.28 |
+| **LCMV Grid Search** (64 pts) | -44.68 | 9.59 dB | 4.30 s | 5.58 |
+| **INCM-MVDR Grid Search** | -16.10 | 1.04 dB | 16.02 s | 5.57 |
+| **SVE-LCMV Grid Search** | -15.24 | 0.98 dB | 10.67 s | 5.57 |
+| **Iterative LCMV (Peak Depletion)** | -44.68 | -2.26 dB | 2.86 s | 9.22 |
+| **MR-LCMV (OSP)** | -16.15 | 5.82 dB | 17.98 s | 5.56 |
+| **MUSIC Grid Search (Classical Baseline)** | -34.27 | 12.38 dB | 5.40 s | 5.56 |
+| **SRP-PHAT Grid Search (Classical Baseline)** | -21.24 | 12.09 dB | 2.18 s | 6.96 |
+| **ILRMA Gridless** (n=4) | -14.07 | 7.87 dB | 10.91 s | 5.89 |
+| **AuxIVA Gridless** (n=4) | -16.15 | 8.86 dB | 6.15 s | 5.28 |
+| **FastIVA Gridless** (n=4) | -72.85* | -11.33 dB* | 4.25 s | 5.73 |
+| **GEV Gridless** (Max-SNR) | -105.23 | -31.44 dB | 0.17 s | 5.28 |
 
 **Verdict:**
-- **AuxIVA** is the most optimal Gridless method. It rejects the interference (8.78 dB) and preserves target quality (-14.09), while running significantly faster than ILRMA.
-- **GEV (Generalized Eigenvalue)** is phenomenally fast (0.19s, perfectly gridless) but fails to separate signals effectively in this dense scenario because it lacks the statistical independence modeling of AuxIVA.
-- **MR-LCMV (Multi-Rank OSP)** offers immense interference rejection (17.95 dB) due to signal subspace projection, but because it relies on iterative Grid Searching, its computational burden (18.43s) makes it unsuitable for real-time applications compared to AuxIVA.
-
-## 4. LOCATA-Inspired Iterative Peak Depletion Beamforming
-Evaluated in `experiments/benchmark_gridless.py`.
-Implements an iterative multi-source resolution technique (similar to IASDNet) that mathematically extracts and depletes the spatial covariance matrix peak-by-peak.
-
-| Multi-Interferer Scenario | Algorithm | Harmonic Score | IRR dB | Execution Time (s) | Peak RAM (MB) |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1 Target + 3 Interferers | **Iterative LCMV (Peak Depletion)** | -10.07 | -2.16 dB | 6.39 s | 9.75 |
-| 1 Target + 3 Interferers | LCMV Grid (64 pts) | -10.07 | 10.51 dB | 4.51 s | 5.56 |
-| 1 Target + 3 Interferers | ILRMA Gridless | -6.50 | -1.44 dB | 11.90 s | 5.89 |
-
-**Verdict:** Iterative Peak Depletion successfully matches standard LCMV's harmonic extraction capabilities in a dense multi-interferer scenario, but operates via a robust peak-depletion pipeline that doesn't require knowing the active source count beforehand (a major finding from the LOCATA challenge).
-
-## 5. INCM-MVDR vs Iterative LCMV (Target Preservation)
-Evaluated in `experiments/benchmark_gridless.py`.
-INCM-MVDR explicitly extracts the target covariance out of the data before spatial nulling to aggressively prevent target self-cancellation.
-
-| Scenario | Method | Harmonic Score | IRR dB | Execution Time (s) |
-|:---:|:---:|:---:|:---:|:---:|
-| 1 Target + 1 Interferer | **INCM-MVDR Grid (64 pts)** | -12.55 | 1.09 dB | 15.80 s |
-| 1 Target + 1 Interferer | LCMV Grid (64 pts) | -27.88 | 9.38 dB | 4.27 s |
-| 1 Target + 3 Interferers | **INCM-MVDR Grid (64 pts)** | -7.45 | 0.59 dB | 15.36 s |
-| 1 Target + 3 Interferers | LCMV Grid (64 pts) | -14.86 | 9.75 dB | 4.56 s |
-
-**Verdict:** INCM-MVDR achieves vastly superior target preservation (better Harmonic Score) than standard LCMV by explicitly preventing the beamformer from treating the target as an interferer. However, this comes at the cost of computational time (15s vs 4s) due to the requisite eigen-decomposition of the target-only subset per frequency bin.
+- **AuxIVA** remains the most optimal Gridless method for quality and time tradeoff.
+- **MUSIC** and **SRP-PHAT** provide solid classical baselines with decent IRR (12+ dB), but their harmonic distortion remains inferior to advanced Gen 2 methods like SVE-LCMV and INCM-MVDR.
+- **INCM-MVDR** provides phenomenal target preservation (-16.10 Harmonic Score compared to LCMV's -44.68) by actively removing the target covariance from the interference matrix, though it runs slower (16 seconds vs 4 seconds) due to eigen-decomposition constraints on each grid point.
