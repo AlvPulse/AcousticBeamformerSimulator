@@ -69,6 +69,7 @@ def init_worker(geo_file, fs, disable_lam):
     from simulator.beamformers.iterative_lcmv import IterativeLCMV
     from simulator.beamformers.music import MUSIC
     from simulator.beamformers.srp_phat import SRP_PHAT
+    from simulator.beamformers.incm_mvdr import INCM_MVDR
 
     WORKER_BEAMFORMERS = {
         "MUSIC": MUSIC(pos_3d, fs),
@@ -79,6 +80,7 @@ def init_worker(geo_file, fs, disable_lam):
         "PhaseOnlyLCMV": PhaseOnlyLCMV(pos_3d, fs),
         "RobustLCMV": RobustLCMV(pos_3d, fs),
         "cGMM_MVDR": cGMM_MVDR(pos_3d, fs),
+        "INCM_MVDR": INCM_MVDR(pos_3d, fs),
         "RobustSOCP": RobustSOCP(pos_3d, fs),
         "EBB": EBB(pos_3d, fs),
         "MultiRank_OSP": MultiRankOSP(pos_3d, fs),
@@ -371,6 +373,9 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         chunk_df.to_csv(chunk_csv_path, index=False)
 
     return chunk_results
+
+
+
 
 
 

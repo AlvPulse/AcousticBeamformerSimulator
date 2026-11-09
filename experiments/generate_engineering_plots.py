@@ -4,12 +4,38 @@ import seaborn as sns
 import os
 
 def generate_plots():
-    csv_path = "docs/benchmark_gridless.csv"
-    if not os.path.exists(csv_path):
-        print(f"Error: {csv_path} not found.")
-        return
+    csv_path_realworld = "docs/real_world_outputs/real_world_evaluation.csv"
+    csv_path_gridless = "docs/benchmark_gridless.csv"
 
-    df = pd.read_csv(csv_path)
+    df = None
+    is_real_world = False
+
+    if os.path.exists(csv_path_realworld):
+        print(f"Generating plots from real-world evaluation: {csv_path_realworld}")
+        import pandas as pd
+        df = pd.read_csv(csv_path_realworld)
+        # Map headers
+        if "Algorithm" in df.columns:
+            df["Method"] = df["Algorithm"]
+        if "RTF" in df.columns:
+            df["Time (s)"] = df["RTF"]
+        if "SSR_Depth_dB" in df.columns:
+            df["IRR_dB"] = df["SSR_Depth_dB"]
+        df["Scenario"] = "Real-World Test"
+        df["Peak RAM (MB)"] = 0 # Not tracked in real-world evaluate script
+        is_real_world = True
+
+        # Metric mapping
+        if "Harmonic_Score" not in df.columns and "LAM_Detectability" in df.columns:
+             df["Harmonic_Score"] = df["LAM_Detectability"]
+
+    elif os.path.exists(csv_path_gridless):
+        import pandas as pd
+        print(f"Generating plots from synthetic gridless benchmark: {csv_path_gridless}")
+        df = pd.read_csv(csv_path_gridless)
+    else:
+        print("Error: No valid evaluation CSV found to plot.")
+        return
     os.makedirs("docs/figures", exist_ok=True)
 
     # 1. Compute vs Quality Trade-off (Scatter Plot)
