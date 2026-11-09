@@ -221,10 +221,11 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
         azs = []
         els = []
 
-        audio_out_dir = os.path.join(out_dir, bf_name)
-        os.makedirs(audio_out_dir, exist_ok=True)
-
         is_gridless = bf_name in ["ILRMA", "AuxIVA", "FastIVA", "GEV", "Iterative_LCMV"]
+
+        folder_type = "gridless" if is_gridless else "grid_based"
+        audio_out_dir = os.path.join(out_dir, folder_type, bf_name)
+        os.makedirs(audio_out_dir, exist_ok=True)
 
         if is_gridless:
             # Process exactly once for Gridless methods
@@ -353,7 +354,7 @@ def process_single_chunk(task_info, grid, output_base, apply_agc, fs=16000):
 
             plt.suptitle(f"{test_name} - {chunk_name} | {bf_name}")
             plt.tight_layout()
-            plt.savefig(os.path.join(out_dir, f"{bf_name}_spatial_maps.png"))
+            plt.savefig(os.path.join(audio_out_dir, f"spatial_maps.png"))
             plt.close(fig)
 
         # Calculate TMPR across the spatial grid

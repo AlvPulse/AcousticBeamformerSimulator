@@ -17,6 +17,7 @@ from simulator.beamformers.sve_lcmv import SVE_LCMV
 from simulator.beamformers.multirank_osp import MultiRankOSP
 from simulator.beamformers.gev import GEV
 from simulator.beamformers.iterative_lcmv import IterativeLCMV
+from simulator.beamformers.incm_mvdr import INCM_MVDR
 
 import tracemalloc
 
@@ -158,6 +159,12 @@ def run_scenario(scenario_name, target_sig, target_pos, interferer_sigs, interfe
     iter_lcmv = IterativeLCMV(pos_3d, fs, max_sources=4)
     _, time_iter, score_iter, irr_iter, mem_iter = run_gridless_bss(iter_lcmv, mix, fs)
     results.append({"Scenario": scenario_name, "Method": "Iterative LCMV (Peak Depletion)", "Harmonic_Score": score_iter, "IRR_dB": irr_iter, "Time (s)": time_iter, "Peak RAM (MB)": mem_iter})
+
+    # 9. INCM-MVDR Grid Search
+    print("  Running INCM-MVDR Grid Search (64 points)...")
+    incm = INCM_MVDR(pos_3d, fs)
+    _, time_incm, score_incm, irr_incm, mem_incm = run_grid_search(incm, mix, fs, grid_size=64)
+    results.append({"Scenario": scenario_name, "Method": "INCM-MVDR Grid (64 pts)", "Harmonic_Score": score_incm, "IRR_dB": irr_incm, "Time (s)": time_incm, "Peak RAM (MB)": mem_incm})
 
     return results
 

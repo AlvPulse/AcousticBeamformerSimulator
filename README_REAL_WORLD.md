@@ -38,8 +38,15 @@ data/field_tests/
 │   └── ...
 ```
 
-### 2. Run the Evaluation Scanner
-Run the `evaluate_real_world.py` script. The scanner will process every chunk for every beamforming algorithm and calculate all proxy metrics (Phase-STOR, Harmonic Score, and Spatial Suppression Ratio).
+### 2. Run the Full Unified Pipeline
+The easiest way to generate all reports, datasets, and engineering graphs in one go is to use the integrated pipeline orchestrator. This script will automatically run the evaluation, trigger the seaborn plotting scripts, and output a Data Analyst Executive Summary directly to the console.
+
+```bash
+PYTHONPATH=. python3 run_full_pipeline.py
+```
+
+### Alternatively: Run the Evaluation Scanner Manually
+If you want to pass specific arguments (like specific input folders or changing grid resolution), you can run the scanner manually:
 
 ```bash
 PYTHONPATH=. python3 experiments/evaluate_real_world.py --input data/field_tests/ --output docs/real_world_outputs/ --grid_points 64 --geo_file array_geo.csv
