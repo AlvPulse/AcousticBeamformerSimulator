@@ -21,3 +21,4 @@ torchaudio>=2.0.0
 transformers>=4.30.0
 tensorflow>=2.10.0
 tensorflow-hub>=0.14.0
+python-docx
