@@ -67,6 +67,7 @@ def init_worker(geo_file, fs, disable_lam):
     from simulator.beamformers.fast_iva import FastIVA
     from simulator.beamformers.gev import GEV
     from simulator.beamformers.iterative_lcmv import IterativeLCMV
+    from simulator.beamformers.incm_mvdr import INCM_MVDR
 
     WORKER_BEAMFORMERS = {
         "DAS": StandardDAS(pos_3d, fs),
@@ -81,6 +82,7 @@ def init_worker(geo_file, fs, disable_lam):
         "GSC_MCWF": GSC_MCWF(pos_3d, fs),
         "SVE_LCMV": SVE_LCMV(pos_3d, fs),
         "Iterative_LCMV": IterativeLCMV(pos_3d, fs),
+        "INCM_MVDR": INCM_MVDR(pos_3d, fs),
         # Gridless Methods
         "ILRMA": ILRMA(pos_3d, fs),
         "AuxIVA": AuxIVA(pos_3d, fs),
