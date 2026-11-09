@@ -10,6 +10,10 @@ from simulator.beamformers.lcmv_smi import LCMVSMI
 from simulator.beamformers.sve_lcmv import SVE_LCMV
 from simulator.beamformers.iterative_lcmv import IterativeLCMV
 from simulator.beamformers.aux_iva import AuxIVA
+from simulator.beamformers.fast_iva import FastIVA
+from simulator.beamformers.incm_mvdr import INCM_MVDR
+from simulator.beamformers.multirank_osp import MultiRankOSP
+from simulator.beamformers.gev import GEV
 from experiments.benchmark_calibration_breakdown import get_harmonic_score
 
 # --- Real-World Audio Simulators ---
@@ -106,8 +110,12 @@ def run_massive_sweep():
     beamformers = {
         "Gen1_LCMV": (LCMVSMI(pos_3d, fs), False),
         "Gen2_SVE-LCMV": (SVE_LCMV(pos_3d, fs), False),
-        "Gen2_Iterative-LCMV": (IterativeLCMV(pos_3d, fs, max_sources=3), False), # Using False here because our wrapper uses look_pos
-        "Gen3_AuxIVA": (AuxIVA(pos_3d, fs, n_components=3, n_iter=15), True)
+        "Gen2_Iterative-LCMV": (IterativeLCMV(pos_3d, fs, max_sources=3), False),
+        "Gen2_INCM-MVDR": (INCM_MVDR(pos_3d, fs), False),
+        "Gen2_MR-LCMV": (MultiRankOSP(pos_3d, fs), False),
+        "Gen3_AuxIVA": (AuxIVA(pos_3d, fs, n_components=3, n_iter=15), True),
+        "Gen3_FastIVA": (FastIVA(pos_3d, fs, n_components=3, n_iter=15), True),
+        "Gen3_GEV": (GEV(pos_3d, fs), True)
     }
 
     results = []
