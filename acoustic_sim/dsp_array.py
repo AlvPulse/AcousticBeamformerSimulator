@@ -1,12 +1,17 @@
 import numpy as np
 
 class ArrayGeometry:
-    def __init__(self, x, y):
+    def __init__(self, x, y, z=None):
         self.x = np.array(x)
         self.y = np.array(y)
+        if z is not None:
+            self.z = np.array(z)
+        else:
+            self.z = np.zeros_like(self.x)
+
         self.n_sensors = len(self.x)
-        if len(self.y) != self.n_sensors:
-            raise ValueError("x and y arrays must have the same length")
+        if len(self.y) != self.n_sensors or len(self.z) != self.n_sensors:
+            raise ValueError("x, y, and z coordinate arrays must have the same length")
 
         # Center the array
         self.x -= np.mean(self.x)
@@ -76,13 +81,15 @@ def load_array(filepath) -> ArrayGeometry:
                 # Format is 3 rows (X, Y, Z) and N columns (sensors)
                 x_vals = df.iloc[0, :].tolist()
                 y_vals = df.iloc[1, :].tolist()
+                z_vals = df.iloc[2, :].tolist()
             else:
-                # Format is N rows (sensors) and >=2 columns (X, Y, ...)
+                # Format is N rows (sensors) and >=2 columns (X, Y, Z, ...)
                 df = df.dropna(subset=[0, 1])
                 x_vals = df.iloc[:, 0].tolist()
                 y_vals = df.iloc[:, 1].tolist()
+                z_vals = df.iloc[:, 2].tolist() if df.shape[1] > 2 else None
 
-            return ArrayGeometry(x_vals, y_vals)
+            return ArrayGeometry(x_vals, y_vals, z_vals)
         except Exception as e:
             raise ValueError(f"Failed to parse CSV array geometry: {e}")
 
