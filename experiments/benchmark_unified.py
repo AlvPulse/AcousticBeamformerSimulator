@@ -76,11 +76,19 @@ def slow_env(seed, freqs=(0.7, 1.3, 2.1)):
     return 0.5 + 0.5 * np.clip(e / 3, -1, 1)
 
 
-def make_scene(gain_spread_db=0.0, return_refs=False):
+def make_scene(gain_spread_db=0.0, return_refs=False, wind=False, drift=False):
     """gain_spread_db: total per-mic gain spread (uniform in +/-(spread/2) dB),
-    simulating uncalibrated hardware (e.g. 6 dB spread = each mic +/-3 dB)."""
+    simulating uncalibrated hardware (e.g. 6 dB spread = each mic +/-3 dB).
+    wind: apply turbulence phase decoherence to each source contribution.
+    drift: slow +/-2% RPM wander on the target's harmonic stack."""
     t = np.arange(int(FS * DUR)) / FS
-    target = sum(np.sin(2 * np.pi * h * t) for h in [420, 840, 1260, 1680]) / 4.0 * slow_env(1)
+    if drift:
+        scale = 1.0 + 0.02 * np.sin(2 * np.pi * 0.23 * t + 1.1)
+        ph = np.cumsum(2 * np.pi * np.outer(np.array([420, 840, 1260, 1680]),
+                                            scale) / FS, axis=1)
+        target = np.sum(np.sin(ph) / 4.0, axis=0) * slow_env(1)
+    else:
+        target = sum(np.sin(2 * np.pi * h * t) for h in [420, 840, 1260, 1680]) / 4.0 * slow_env(1)
     int1 = bandpass_noise(300, 2000, len(t)) * slow_env(2)
     int2 = bandpass_noise(500, 1500, len(t)) * slow_env(3)
 
@@ -89,9 +97,22 @@ def make_scene(gain_spread_db=0.0, return_refs=False):
         out = np.stack([frac_delay(sig, np.linalg.norm(POS[m] - p) / C) for m in range(M)])
         return out / np.sqrt(np.mean(out**2))
 
+    def wind_jitter(x, az, sigma=0.12):
+        from simulator.acoustics.channel import apply_turbulence_decoherence
+        Z = spsig.stft(x, fs=FS, nperseg=512, noverlap=256, window="hann")[2]
+        freqs = np.fft.rfftfreq(512, 1 / FS)
+        freqs[0] = 1e-6
+        Zp = apply_turbulence_decoherence(Z, POS, src_pos(az), freqs, sigma_phi_base=sigma)
+        _, xw = spsig.istft(Zp, fs=FS, nperseg=512, noverlap=256, window="hann")
+        return xw
+
     x_t = prop(target, TARGET_AZ)
     x_1 = prop(int1, -60.0) * 10 ** (4.0 / 20)
     x_2 = prop(int2, 150.0) * 10 ** (1.0 / 20)
+    if wind:
+        x_t = wind_jitter(x_t, TARGET_AZ)
+        x_1 = wind_jitter(x_1, -60.0)
+        x_2 = wind_jitter(x_2, 150.0)
     noise = 0.1 * rng.standard_normal((M, len(t)))
     mix = x_t + x_1 + x_2 + noise
     if gain_spread_db > 0:
