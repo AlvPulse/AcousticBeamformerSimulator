@@ -97,9 +97,10 @@ def make_scene(int_az, inr_db):
                     for m in range(M)])
     p_near = far_pos(int_az, dist=10.0)
     d = np.linalg.norm(POS - p_near, axis=1)
-    x_i = np.stack([frac_delay(bark_src, d[m] / C) / (4 * np.pi * d[m])
-                    for m in range(M)])
-    x_i *= np.sqrt(np.mean(d ** 2))  # undo mean 1/r so gain is explicit
+    # NOTE: no 1/(4*pi*d) -- the external multiplier sets the TRUE per-mic
+    # INR (an earlier version divided by 4*pi*d and only partly compensated,
+    # understating the nominal INR by ~22 dB at 10 m)
+    x_i = np.stack([frac_delay(bark_src, d[m] / C) for m in range(M)])
 
     x_i *= 10 ** (inr_db / 20) * 0.1 / np.sqrt(np.mean(x_i ** 2))  # rel noise floor
     noise = 0.1 * rng.standard_normal((M, len(t)))

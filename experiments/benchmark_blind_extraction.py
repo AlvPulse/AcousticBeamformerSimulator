@@ -87,7 +87,7 @@ def make_scene(urban_az):
     def prop_near(sig, az, dist=10.0):
         d = np.linalg.norm(POS - far_pos(az, dist), axis=1)
         x = np.stack([frac_delay(sig, d[m] / C) for m in range(M)])
-        return x / (4 * np.pi * d)[:, None]
+        return x  # external multiplier sets the true per-mic INR (no 1/r)
 
     x_s = prop_far(siren, 40.0)
     x_b = prop_near(bark_src, -60.0) * 10 ** (45 / 20) * 0.1 / np.sqrt(np.mean(bark_src ** 2))
