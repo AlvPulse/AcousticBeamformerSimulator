@@ -23,14 +23,15 @@ class BaseBeamformer:
         from simulator.acoustics.channel import compute_delay_and_attenuation
         delays, _ = compute_delay_and_attenuation(self.pos_mics, look_pos, self.c, is_spherical)
 
-        # delays is (n_mics,)
-        # freqs is (n_freqs,)
-        # a = exp(-j * 2 * pi * f * delay)
-        # However, to steer, we apply +j * 2 * pi * f * delay (conjugate)
+        # delays is (n_mics,) -- physical arrival delays tau_m.
+        # Physical propagation: X_m(f) = S(f) * e^{-j 2*pi*f*tau_m}, so the
+        # steering (propagation) vector is a = e^{-j 2*pi*f*tau}.
+        # Beamformers apply conj(a) to align the channels; MVDR-style methods
+        # use a directly in the distortionless constraint w^H a = 1.
 
         omega = 2 * np.pi * self.freqs
         phase = np.outer(omega, delays) # (n_freqs, n_mics)
-        a = np.exp(1j * phase)
+        a = np.exp(-1j * phase)
 
         # Normalize
         a = a / np.sqrt(self.n_mics)

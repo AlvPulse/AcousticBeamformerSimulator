@@ -33,16 +33,13 @@ class PhaseOnlyLCMV(BaseBeamformer):
             R = (X_f_phase @ np.conj(X_f_phase).T) / T
 
             # Ledoit-Wolf Optimal Covariance Shrinkage
+            # (vectorized: sum_t ||x_t x_t^H - R||_F^2 = sum_t ||x_t||^4 - T ||R||_F^2)
             trace_R = np.trace(R)
             mu = trace_R / M
             F_norm_sq = np.sum(np.abs(R - mu * np.eye(M))**2)
 
-            var_est = 0
-            for t in range(T):
-                x_t = X_f_phase[:, t:t+1]
-                R_t = x_t @ np.conj(x_t).T
-                var_est += np.sum(np.abs(R_t - R)**2)
-            var_est /= (T**2)
+            e_t = np.sum(np.abs(X_f_phase)**2, axis=0)  # ||x_t||^2 per frame
+            var_est = (np.sum(e_t**2) - T * np.sum(np.abs(R)**2)) / (T**2)
 
             if F_norm_sq > 0:
                 shrinkage = max(0.0, min(1.0, float(np.real(var_est / F_norm_sq))))

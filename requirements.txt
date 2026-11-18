@@ -1,0 +1,14 @@
+numpy>=2.5
+scipy>=1.18
+pandas>=3.1
+matplotlib>=3.11
+librosa>=1.0
+soundfile>=0.14
+pyroomacoustics>=0.10
+cvxpy>=1.9
+tabulate>=0.10
+pytest>=9
+
+# Optional: LAM / AST audio-tagging pipeline (experiments/evaluate_real_world.py)
+# transformers
+# torch

@@ -5,6 +5,18 @@ from simulator.acoustics.channel import compute_delay_and_attenuation, generate_
 def compute_rms(sig):
     return np.sqrt(np.mean(sig**2))
 
+
+def fractional_delay(sig, delay_s, fs):
+    """
+    Exact band-limited delay via FFT phase shift: returns s(t - delay_s).
+    Replaces integer-sample np.roll, which quantized sub-sample delays and
+    injected up to ~0.8 rad of phase error per mic at 2 kHz.
+    """
+    n = len(sig)
+    S = np.fft.rfft(sig)
+    freqs = np.fft.rfftfreq(n, 1.0 / fs)
+    return np.fft.irfft(S * np.exp(-2j * np.pi * freqs * delay_s), n=n)
+
 def synthesize_scene(pos_mics, fs, n_samples, target_sig, target_pos, interferer_sig, interferer_pos_trajectory,
                      target_snr_db, interferer_inr_db, turbulence=False):
     """
@@ -27,14 +39,7 @@ def synthesize_scene(pos_mics, fs, n_samples, target_sig, target_pos, interferer
     target_delays, target_atts = compute_delay_and_attenuation(pos_mics, target_pos, is_spherical=False)
     target_mc = np.zeros((M, n_samples))
     for m in range(M):
-        # Shift
-        shift_samples = int(np.round(target_delays[m] * fs))
-        shifted = np.roll(target_sig, shift_samples)
-        if shift_samples > 0:
-            shifted[:shift_samples] = 0
-        elif shift_samples < 0:
-            shifted[shift_samples:] = 0
-        target_mc[m] = shifted * target_atts[m]
+        target_mc[m] = fractional_delay(target_sig, target_delays[m], fs) * target_atts[m]
 
     # Scale target to achieve target_snr_db at mic 0
     target_power = compute_rms(target_mc[0])**2
@@ -48,48 +53,26 @@ def synthesize_scene(pos_mics, fs, n_samples, target_sig, target_pos, interferer
         # Static
         int_delays, int_atts = compute_delay_and_attenuation(pos_mics, interferer_pos_trajectory, is_spherical=True)
         for m in range(M):
-            shift_samples = int(np.round(int_delays[m] * fs))
-            shifted = np.roll(interferer_sig, shift_samples)
-            if shift_samples > 0:
-                shifted[:shift_samples] = 0
-            elif shift_samples < 0:
-                shifted[shift_samples:] = 0
-            interferer_mc[m] = shifted * int_atts[m]
+            interferer_mc[m] = fractional_delay(interferer_sig, int_delays[m], fs) * int_atts[m]
     else:
-        # Dynamic (trajectory) - simple approximation by updating delay per block or sample
-        # For simplicity in this benchmark, we can do it block-wise or use a fractional delay filter.
-        # Let's use a simpler static interferer at average position for now, or block-wise if needed.
-        # Given the instruction to handle trajectory, let's implement block-wise processing.
+        # Dynamic (trajectory): time-varying fractional delay via linear
+        # interpolation of the source at sample positions (t_out - tau(t)).
         block_size = 256
         n_blocks = n_samples // block_size
+        src_index = np.arange(n_samples)
         for b in range(n_blocks):
             idx = b * block_size
             pos_idx = min(idx, interferer_pos_trajectory.shape[0]-1)
             pos_current = interferer_pos_trajectory[pos_idx]
 
             int_delays, int_atts = compute_delay_and_attenuation(pos_mics, pos_current, is_spherical=True)
+            out_t = np.arange(idx, idx + block_size) / fs
             for m in range(M):
-                shift_samples = int(np.round(int_delays[m] * fs))
-
-                # We need the source chunk that will arrive at time idx:idx+block_size
-                # Because of delay, we need source samples at idx - shift_samples
-                src_start = idx - shift_samples
-                src_end = src_start + block_size
-
-                if src_start >= 0 and src_end < n_samples:
-                    chunk = interferer_sig[src_start:src_end]
-                else:
-                    chunk = np.zeros(block_size)
-                    if src_start < 0:
-                        valid_start = 0
-                        valid_end = min(src_end, n_samples)
-                        if valid_end > 0:
-                            chunk[-src_start: -src_start + valid_end] = interferer_sig[valid_start:valid_end]
-                    else:
-                        valid_start = src_start
-                        valid_end = n_samples
-                        if valid_start < n_samples:
-                            chunk[:valid_end-valid_start] = interferer_sig[valid_start:valid_end]
+                src_pos = (out_t - int_delays[m]) * fs
+                valid = (src_pos >= 0) & (src_pos < n_samples - 1)
+                chunk = np.zeros(block_size)
+                if np.any(valid):
+                    chunk[valid] = np.interp(src_pos[valid], src_index, interferer_sig)
 
                 interferer_mc[m, idx:idx+block_size] = chunk * int_atts[m]
 

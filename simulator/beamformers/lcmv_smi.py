@@ -25,11 +25,13 @@ class LCMVSMI(BaseBeamformer):
             # Diagonal loading
             R_load = R + self.epsilon * np.trace(R) * np.eye(M)
 
-            try:
-                R_inv = np.linalg.inv(R_load)
-            except np.linalg.LinAlgError:
-                # Fallback to pseudo-inverse
-                R_inv = np.linalg.pinv(R_load)
+            # Stable eigendecomposition-based inverse with eigenvalue floor.
+            # (The previous try/inv-except/pinv could stall on pathological
+            # covariances; eigh is bounded O(M^3) and never does.)
+            eigvals, eigvecs = np.linalg.eigh(R_load)
+            floor = self.epsilon * max(float(np.max(eigvals)), 1e-30)
+            eigvals = np.maximum(eigvals, floor)
+            R_inv = (eigvecs * (1.0 / eigvals)) @ np.conj(eigvecs).T
 
             # Steering vector for this freq: (M,)
             a_f = a[f, :]
