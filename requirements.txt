@@ -9,6 +9,6 @@ cvxpy>=1.9
 tabulate>=0.10
 pytest>=9
 
-# Optional: LAM / AST audio-tagging pipeline (experiments/evaluate_real_world.py)
-# transformers
-# torch
+# LAM / AST audio-tagging pipeline (experiments/evaluate_real_world.py, lam_ab_test.py)
+transformers>=5.23
+torch>=2.15  # CPU wheel sufficient: --index-url https://download.pytorch.org/whl/cpu

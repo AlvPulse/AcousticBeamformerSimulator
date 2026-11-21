@@ -233,3 +233,36 @@ delay +/-1 cm}; miscalibration applied to the raw recordings):
 2. Multi-pitch estimator for the aligned-hum case (currently 40-60%).
 3. Field Phase 2 (Gate 2 in EXECUTION_PLAN.md) remains the decisive
    company evidence.
+
+
+## 14. 2026-11-21 — LAM stack restored; real AST A/B confirms the coloration hypothesis
+
+The .venv had TensorFlow 2.21 but not transformers; installed transformers
+5.23 + CPU torch 2.15 (AST model ships PyTorch weights). First real
+AST A/B on the same scene's target (top class + score):
+  clean siren      -> Chirp tone 0.64 / Sine wave 0.32 (tonal, confident)
+  GSC  @20deg err  -> Siren 0.084  (only method keeping the siren identity)
+  LCMV calibrated  -> Wind instrument 0.14 (coloration shifts the class!)
+  LCMV @20deg err  -> Waterfall 0.13 (tonal identity lost entirely)
+  DAS  @20deg err  -> Tools 0.17 (contaminated mixture, wrong classes)
+The user's per-bin-coloration concern is now classifier-verified: LCMV
+changes what LAM hears; GSC preserves it. (Scores low in absolute terms
+because the synthetic siren is a pure harmonic stack, not a real siren
+recording -- the RELATIVE comparison is the evidence.)
+
+## 15. 2026-11-21 — Gap-closer outcomes (honest scoreboard)
+
+- Multi-pitch (aligned hum): greedy 0/10 -> multi-pitch 2/10 (real 16 dB
+  detections). Diagnosed: weak fundamental (+4.8 dB excess), envelope
+  duty-cycling breaks persistence tests, broadband sources produce comb
+  impostors. Needs a literature-grade harmonic-sieve estimator. OPEN.
+- Multi-chunk narrowband (static-continuous +50 dB): diagnostic proved the
+  weak source IS eigen-component 4 of the chunk-averaged covariance
+  (corr 0.97 with true steering, +23 dB). Simple fixes (rank-4 MUSIC,
+  loud-steering projection) failed because the near-field broadband
+  interferer spans >=3 eigenvectors. Matched-subspace detection after
+  blind loud-subspace removal remains the defined path. OPEN.
+- Docs delivered: METRICS.md (plain-language metric glossary + retired
+  metric warning) and PIPELINE.md (exact stage-by-stage spec, gain-norm
+  formula and assumptions, how combinations are tested, no-ground-truth
+  field reporting protocol).
