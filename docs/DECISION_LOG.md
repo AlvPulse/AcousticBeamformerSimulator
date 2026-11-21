@@ -266,3 +266,20 @@ recording -- the RELATIVE comparison is the evidence.)
   metric warning) and PIPELINE.md (exact stage-by-stage spec, gain-norm
   formula and assumptions, how combinations are tested, no-ground-truth
   field reporting protocol).
+
+
+## 16. 2026-11-21 — Full 13-scenario x 8-pipeline matrix; gain-norm trap quantified
+
+- All five grid variants (LCMV/PhaseOnly/Robust/GSC+gn/DAS) fail target
+  selection in ALL 11 interferer scenarios -- the algorithm-swap question
+  is closed with data (INCREMENTAL_REPORT.md L1 verdict: NO).
+- Tonality-argmax selection fails when an interferer is more tonal (S07)
+  or the target is non-tonal (S12): detector-driven selection (S6) is
+  load-bearing, not optional.
+- L3b (MUSIC->SubspaceNull->comb): 16.7-16.9 dB under near-field bark +
+  gain/phase errors; needs full-path extractor selection (S01 self-null).
+- Gain-norm adversarial (user's concern, true 1/r): 2 m interferer bakes
+  7 dB acoustics into 'gains', -1.3 dB when mis-applied cross-scene;
+  per-chunk normalization = zero penalty. Rule: never transfer gains
+  across scenes.
+- Dual-LAM: AST 10-10 + AST 12-12 (balanced) as second opinion.
