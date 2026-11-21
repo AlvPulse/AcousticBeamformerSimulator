@@ -288,3 +288,31 @@ Dual-LAM cross-check: BLOCKED by network (12-12 variant weights download
 stalls on SSL; script ready at experiments/lam_dual_check.py -- rerun when
 the network allows, or with an HF_TOKEN for faster downloads). The AST
 10-10 A/B (entry 14) already answers the LAM-coloration question.
+
+
+## 17. 2026-11-21 — User challenge: normalization vs the history-anomaly
+## detector; assumptions log; machinery QC
+
+Pipeline model CORRECTED: company detection is per-beam POWER HISTORY +
+anomaly + clustering (level CHANGE vs own history), not power-argmax; and
+their LCMV peak-normalizes channels (max->1) per chunk. Consequence:
+cross-chunk LEVEL STABILITY is the load-bearing quantity, and any
+per-chunk data-driven normalization attacks it exactly when interference
+changes.
+
+Norm-ruin benchmark (60 chunks, constant-level target, interferer on in
+chunks 20-39, +30 dB):
+- fixed gains: target-beam onset shift = pure leakage only
+  (+18.6 dB DAS / +7.3 dB LCMV)
+- per-chunk RMS norm: onset shift -18.9 dB (DAS) / -30.2 dB (LCMV)
+  -- the target beam's history COLLAPSES as an artifact
+- company max->1 scheme: -21.7 / -29.6 dB + 3.5-4.5 dB target-gain jumps
+  in delivered audio
+- quiet scatter < 0.5 dB for ALL policies: the damage is
+  interference-coupled, exactly as the user warned
+NEW DESIGN RULE: normalization gains over long windows with hysteresis
+(or coherence-weighted); level-history path uses unnormalized beams.
+
+ASSUMPTIONS.md created (full assumption log with statuses). Benchmark
+machinery QC'd (tests/test_qc_benchmarks.py, 5 checks incl.
+Capon-map==sweep exactness and SI-SDR manual cross-check): all pass.
