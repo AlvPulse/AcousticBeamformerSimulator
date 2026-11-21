@@ -200,6 +200,32 @@ persistence (Phase 2) -> detector/classifier.
 Extractors by regime: GSC+gain-norm (moderate imbalance, Phase-1 MC);
 LCMV+gn / SubspaceNull (extreme INR); DAS (dominant broadband source).
 
+## 13. 2026-11-20 — Industrial robustness: user's no-priors critique validated with data
+
+**Critique tested:** burstiness-gating assumes intermittent interferers;
+an industrial system must be interferer-agnostic (continuous machines,
+passing cars, wind/rain, gain AND phase miscalibration).
+
+`benchmark_industrial.py` (5 draws x {cal, miscal: gain +/-3 dB + per-mic
+delay +/-1 cm}; miscalibration applied to the raw recordings):
+
+- C50 continuous machine +50 dB: gating collapses to 0-20% (as predicted);
+  ALL per-chunk localizers fail on the weak target (MUSIC wide/nb 0%,
+  SRP_nb 20%, SubMUSIC_nb 20-40%). Extraction at known az holds at ~34 dB
+  margins, unaffected by miscalibration.
+- C50W +wind: margins halve to ~17 dB (still positive); DOA unchanged.
+- M45 MOVING car +45 dB: 100% weak-target DOA for all MUSIC variants and
+  even gating -- movers smear across steering directions and are BENIGN
+  for stationary-target localization. Miscalibration: no measurable cost.
+
+**Conclusions (pipeline v5):**
+1. Gating is demoted to an opportunistic accelerator, not a dependency.
+2. The static-continuous-extreme interferer is the only unsolved per-chunk
+   case for weak-target DOA -> must be answered by MULTI-CHUNK narrowband
+   integration (60 chunks/session gives ~+18 dB coherent gain; a
+   target-class prior, not an interferer prior).
+3. Extraction stage is calibration- and semi-wind-robust as-is.
+
 ## Next decision gates
 
 1. Gated-DOA MC validation (expect siren DOA back to ~100%): if confirmed,
