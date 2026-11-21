@@ -283,3 +283,8 @@ recording -- the RELATIVE comparison is the evidence.)
   per-chunk normalization = zero penalty. Rule: never transfer gains
   across scenes.
 - Dual-LAM: AST 10-10 + AST 12-12 (balanced) as second opinion.
+
+Dual-LAM cross-check: BLOCKED by network (12-12 variant weights download
+stalls on SSL; script ready at experiments/lam_dual_check.py -- rerun when
+the network allows, or with an HF_TOKEN for faster downloads). The AST
+10-10 A/B (entry 14) already answers the LAM-coloration question.
