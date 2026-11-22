@@ -1,0 +1,23 @@
+Claim,Data,Metric,Comparison,Test,Statistic,p_raw,Effect,n,Note,p_holm,Verdict
+C1 A_gridLCMV selection <= chance (is 0%),mc_benchmark,target-selection,0/60 correct vs 50%,exact binomial,0.0,8.673617379884035e-19,,60,,1.9081958235744878e-17,SUPPORTED
+C1 A'_gridPhaseOnly selection <= chance (is 0%),mc_benchmark,target-selection,0/60 correct vs 50%,exact binomial,0.0,8.673617379884035e-19,,60,,1.9081958235744878e-17,SUPPORTED
+C1 A+_gridLCMV+gn selection <= chance (is 0%),mc_benchmark,target-selection,0/60 correct vs 50%,exact binomial,0.0,8.673617379884035e-19,,60,,1.9081958235744878e-17,SUPPORTED
+C2 GSC+gn > LCMV SI-SDR (field_wind_drift@gain_6dB),mc_benchmark,SI-SDR,B3 vs B,paired Wilcoxon,210.0,9.5367431640625e-07,1.0,20,,1.621246337890625e-05,SUPPORTED
+C2 GSC+gn > LCMV SI-SDR (anechoic@gain_6dB),mc_benchmark,SI-SDR,B3 vs B,paired Wilcoxon,55.0,0.0009765625,1.0,10,,0.0146484375,SUPPORTED
+C2 GSC+gn > LCMV SI-SDR (field_wind_drift@gain_12dB),mc_benchmark,SI-SDR,B3 vs B,paired Wilcoxon,210.0,9.5367431640625e-07,1.0,20,,1.621246337890625e-05,SUPPORTED
+C2 GSC+gn > LCMV SI-SDR (anechoic@gain_12dB),mc_benchmark,SI-SDR,B3 vs B,paired Wilcoxon,55.0,0.0009765625,1.0,10,,0.0146484375,SUPPORTED
+C3 GSC > LCMV under phase_deg=20deg,phase_robustness,SI-SDR,GSC vs LCMV,sign test (3/3),3.0,0.125,1.0,3,n=3 draws: underpowered by design,1.0,UNDERPOWERED (consistent)
+C3 GSC > LCMV under delay_cm=2cm,phase_robustness,SI-SDR,GSC vs LCMV,sign test (3/3),3.0,0.125,1.0,3,n=3 draws: underpowered by design,1.0,UNDERPOWERED (consistent)
+C4 LCMV colors spectrum more than GSC,phase_robustness,line-gain spread,LCMV vs GSC (all 8 error cells),paired Wilcoxon,300.0,5.960464477539063e-08,0.82,24,,1.0728836059570312e-06,SUPPORTED
+C5 LCMV outputs classified 'Vehicle' vs others 'Speech' (field),field_candidates,AST top class,LCMV 12/12 Vehicle; others 31/31 Speech,Fisher exact,inf,6.519466558908194e-11,,43,,1.238698646192557e-09,SUPPORTED
+C6 |onset artifact| RMS->LCMV > LCMV,initial_changes(stability),|onset shift| dB,RMS->LCMV vs LCMV,paired Wilcoxon,14.0,0.28125,0.33,6,,1.0,NOT SUPPORTED
+C6 |onset artifact| MAX->LCMV > LCMV,initial_changes(stability),|onset shift| dB,MAX->LCMV vs LCMV,paired Wilcoxon,15.0,0.21875,0.33,6,,1.0,NOT SUPPORTED
+C6 |onset artifact| RMS->GSC > GSC,initial_changes(stability),|onset shift| dB,RMS->GSC vs GSC,paired Wilcoxon,14.0,0.28125,0.22,6,,1.0,NOT SUPPORTED
+C6 |onset artifact| MAX->GSC > GSC,initial_changes(stability),|onset shift| dB,MAX->GSC vs GSC,paired Wilcoxon,12.0,0.421875,0.22,6,,1.0,NOT SUPPORTED
+"C7 LCMV dSIR > GSC dSIR (calibrated, ESC-50)",initial_changes(synthetic),dSIR,LCMV vs GSC,paired Wilcoxon,20.0,0.03125,0.33,6,,0.40625,NOT SUPPORTED
+C8 RMS->GSC more level-stable than GSC (field),initial_changes_field,level std dB,RMS->GSC vs GSC,sign test (4/4),4.0,0.0625,-1.0,4,n=4 dirs: sign test,0.75,UNDERPOWERED (consistent)
+C8 RMS->GSC more level-stable than LCMV (field),initial_changes_field,level std dB,RMS->GSC vs LCMV,sign test (4/4),4.0,0.0625,-1.0,4,n=4 dirs: sign test,0.75,UNDERPOWERED (consistent)
+C8 RMS->GSC more level-stable than DAS (field),initial_changes_field,level std dB,RMS->GSC vs DAS,sign test (4/4),4.0,0.0625,-1.0,4,n=4 dirs: sign test,0.75,UNDERPOWERED (consistent)
+C9 blind siren recovery > 50% (A45),blind_mc_results,siren_recovered,5/10,exact binomial,5.0,0.623046875,,10,,1.0,NOT SUPPORTED
+C9 blind siren recovery > 50% (A50),blind_mc_results,siren_recovered,7/10,exact binomial,7.0,0.171875,,10,,1.0,NOT SUPPORTED
+C9 blind siren recovery > 50% (B45),blind_mc_results,siren_recovered,6/10,exact binomial,6.0,0.376953125,,10,,1.0,NOT SUPPORTED

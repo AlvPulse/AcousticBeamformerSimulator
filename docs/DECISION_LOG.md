@@ -371,3 +371,19 @@ dev/test discipline, equalized tuning budgets, submission-style I/O,
 paired stats harness (G13), CRB curves (G12), annotated field campaign
 via ESC-50 playback at surveyed positions (G11). Existing synthetic
 evidence downgraded to dev-split-grade until re-run under v2.
+
+## 21. 2026-11-21 — Statistical validation harness (G13) run on all claims
+
+Every project inference now carries a hypothesis test (paired Wilcoxon /
+sign / exact binomial / Fisher, Holm-corrected, Cliff delta effects):
+SUPPORTED (9/22): grid selection=0% (p~1e-17); GSC+gn>LCMV under gain
+imbalance (delta=1.0, all cells); LCMV spectral coloration > GSC
+(p_holm=1e-6, delta=0.82); LCMV->AST-Vehicle vs others->Speech on FIELD
+(p_holm=1.2e-9).
+NOT YET SUPPORTED (honest): norm-onset artifacts (directionally
+consistent, delta 0.2-0.3, n=6 classes -- need the 50-class ESC-50 run);
+LCMV dSIR>GSC (killed by Holm at n=6); blind siren recovery vs coin-flip
+at extreme INR (5-7/10, n=10 -- the weak-target frontier is NOT yet
+statistically demonstrated). UNDERPOWERED: phase-robustness (n=3 draws
+by design) and field stability (n=4 dirs; sign 4/4 after harness
+direction fix). All verdicts in docs/stats_validation.csv.
