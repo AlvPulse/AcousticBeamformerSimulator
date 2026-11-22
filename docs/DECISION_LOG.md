@@ -357,3 +357,17 @@ points), C1-C10 condition axes, statistical protocol, the BENCH-v1
 scorecard format, and the G1-G10 gap list with build order. Existing
 evidence mapped; largest gaps: range envelope (G1), ROC harness (G2),
 wind curve (G3).
+
+## 20. 2026-11-21 — BENCHMARK_PLAN v2 after literature review
+
+Reviewed: LOCATA (evaluation-on-data, motion-capture GT), DCASE SELD
+(pre-registered 4-metric panel, dev/eval split), SiSEC/MDX (hidden test,
+subjective), DOA Monte-Carlo practice (100-500 trials, RMSE-vs-SNR,
+CRB), real-array datasets (dEchorate, RealMAN), wind literature (real
+wind + coherence), stats practice (paired Wilcoxon, Holm, effect sizes),
+task-driven evaluation trend. v2 adds: pre-registered factorial design
+with power-based n (100/cell DOA, >=20 draws detection), ESC-50 fold
+dev/test discipline, equalized tuning budgets, submission-style I/O,
+paired stats harness (G13), CRB curves (G12), annotated field campaign
+via ESC-50 playback at surveyed positions (G11). Existing synthetic
+evidence downgraded to dev-split-grade until re-run under v2.
