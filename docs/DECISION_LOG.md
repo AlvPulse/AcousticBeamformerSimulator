@@ -316,3 +316,34 @@ NEW DESIGN RULE: normalization gains over long windows with hysteresis
 ASSUMPTIONS.md created (full assumption log with statuses). Benchmark
 machinery QC'd (tests/test_qc_benchmarks.py, 5 checks incl.
 Capon-map==sweep exactness and SI-SDR manual cross-check): all pass.
+
+
+## 18. 2026-11-21 — Initial-changes benchmark (synthetic ESC-50 + REAL field
+## data); user directive: field detectability is the final benchmark
+
+USER DIRECTIVE: synthetic work is for reporting; the final benchmark for
+every idea is DETECTABILITY ON THE FIELD DATA under the uncalibrated
+array. Plan re-centered accordingly.
+
+Initial small-changes menu (their architecture kept; both normalization
+variants retained as requested), 6 REAL ESC-50 interferer classes:
+- Synthetic @oracle: LCMV-family SI-SDR 4.9 dB / dSIR ~45 dB but
+  LineSpread 3.2-3.5 dB; GSC 4.2 dB / 33.9 dB / 0.21 dB (flat).
+- Stability (their anomaly statistic) with REAL interferers: plain
+  LCMV/GSC onset +11.4/+12.0 dB (pure leakage); ALL per-chunk norm
+  variants -14.9..-17.2 dB artifacts -- norm-ruin confirmed on real
+  interferer classes.
+- FIELD (4 persistent directions x 5 chunks, AST 10-10): every LCMV
+  variant classifies "Vehicle" (0.27-0.37); GSC/DAS/PhaseOnly classify
+  "Speech" (0.69-0.80) -- the LCMV coloration effect is REAL-DATA
+  CONFIRMED on their recordings. Level stability: RMS->GSC 0.31-0.33 dB
+  (best, 3x), MAX->GSC 0.79, plain GSC/DAS 0.95, LCMV ~1.05,
+  PhaseOnly worst 1.1-1.3.
+
+RECOMMENDED INITIAL CHANGE (minimal, their architecture): GSC + RMS
+normalization for the extraction/classification path (class-correct
+"Speech", flattest spectrum, phase-robust, best field level stability);
+level-history path on UNNORMALIZED GSC (dual-path rule: per-chunk RMS
+has the -15 dB onset artifact when interference patterns change).
+Ambitious track unchanged: DOA-first shadow run, then per-candidate
+tracks; BSS contingency.
