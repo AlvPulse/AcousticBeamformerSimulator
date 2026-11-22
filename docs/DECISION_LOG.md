@@ -347,3 +347,13 @@ level-history path on UNNORMALIZED GSC (dual-path rule: per-chunk RMS
 has the -15 dB onset artifact when interference patterns change).
 Ambitious track unchanged: DOA-first shadow run, then per-candidate
 tracks; BSS contingency.
+
+## 19. 2026-11-21 — BENCHMARK_PLAN.md: unified scorecard framework
+
+User request: named metric families per method/algorithm combination
+(wind-proof, range of detection, detectability). Plan defines F1-F8
+families (incl. R90 detection range and B-3dB robustness tolerance
+points), C1-C10 condition axes, statistical protocol, the BENCH-v1
+scorecard format, and the G1-G10 gap list with build order. Existing
+evidence mapped; largest gaps: range envelope (G1), ROC harness (G2),
+wind curve (G3).
