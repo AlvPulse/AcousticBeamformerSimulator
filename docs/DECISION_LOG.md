@@ -387,3 +387,26 @@ at extreme INR (5-7/10, n=10 -- the weak-target frontier is NOT yet
 statistically demonstrated). UNDERPOWERED: phase-robustness (n=3 draws
 by design) and field stability (n=4 dirs; sign 4/4 after harness
 direction fix). All verdicts in docs/stats_validation.csv.
+
+## 22. 2026-11-24 — Mission framing: birds vs UAV/aerial; YAMNet added
+
+User clarified the mission: detect special birds, discriminated from
+UAVs/airplanes/helicopters/engines. Added YAMNet (16 MB ONNX, independent
+MobileNet architecture) as second LAM; both models score the same audio.
+Detectability metric = bird-vs-aerial margin (P(bird classes) - max
+P(engine/aerial classes)) per model.
+
+Bird-vs-aerial benchmark (real ESC-50 bird clip as target, real
+helicopter near-field +40 dB + engine +30 dB):
+  SubspaceNull: AST +0.19 / YAMNet +0.55 -- ONLY method positive on BOTH
+  LCMV:         AST +0.09 / YAMNet +0.36
+  GSC/GSC+gn:   negative on both (extreme-INR leak, in mission terms)
+  DAS:          negative; raw mic: -0.40/-0.58
+  Dual-model agreement on method ordering = detectability robust to model
+  change (the requested cross-check).
+Synthetic-quadrotor variant: all margins <= 0 on YAMNet; AST gives DAS
++0.31 -- possible UAV-rotor-harmonics -> bird-class confusion on AST
+(-flagged: UAV false-positive risk needs a dedicated confusion test).
+Field candidates (all 4 persistent directions x methods): margins ~0,
+no bird-like source in this session (consistent with Speech dominance);
+LCMV most negative again (coloration).
