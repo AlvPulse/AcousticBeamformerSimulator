@@ -410,3 +410,34 @@ Synthetic-quadrotor variant: all margins <= 0 on YAMNet; AST gives DAS
 Field candidates (all 4 persistent directions x methods): margins ~0,
 no bird-like source in this session (consistent with Speech dominance);
 LCMV most negative again (coloration).
+
+## 23. 2026-11-25 — Three-domain LCMV-replacement fact-check (theory +
+## synthetic + REAL STFT showcase)
+
+User roadmap: (1) grid-swap first (PhaseOnly is their candidate),
+(2) BSS after grid beamformer, (3) full pipeline comparison (grid vs
+DOA-first vs BSS+BF). This entry delivers the three-domain swap study.
+
+DOMAIN 1 (theory): LCMV_REPLACEMENT_THEORY.md -- per candidate, the math
+of why it behaves as measured, incl. PhaseOnly gain-invariance proof and
+its costs (eigenvalue-contrast loss, inherited coloration).
+
+DOMAIN 3 (real field, docs/field_stft/*.png + field_stft_analysis.csv):
+input mic0 STFT vs each output STFT, shared dB scale, prior/posterior
+metrics on 3 chunks x 2 persistent directions. KEY FINDINGS on THEIR data:
+- LCMV: LSD 10.2-10.9 (most spectral modification), suppresses the
+  1.5-3.5 kHz band by -13..-16 dB, AST flips Speech->Vehicle EVERY time
+  (5/5 prior/posterior pairs; the coloration, visible as spectrogram
+  band suppression).
+- PhaseOnly: LSD 6.7-7.4, mild band shift, AST Speech->Speech/Music;
+  least modification after GSC; high-band -4..-10 dB shift visible.
+- GSC / GSC+gn / DAS: LSD 6.6-6.7 (least), tonality 26->30-40, AST
+  Speech->Speech. GSC+gn now matches GSC after fixing normalization.
+- SubspaceNull: LSD 6.4-7.1, AST Speech->Speech except one Sliding door.
+
+BUG FOUND & FIXED during showcase: per-chunk RMS gain-normalization
+x/rms AMPLIFIED their quiet recordings by 1/median_rms = 279x = +49 dB
+(their mic RMS ~0.0036). Fixed to level-preserving form x * median(rms)/
+rms (equalizes relative gains without changing absolute level). The
++49 dB version would have wrecked their level-history anomaly detector
+- exactly the user normalization warning, now on their real data.

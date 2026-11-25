@@ -213,8 +213,12 @@ def build_scenario(sid):
 
 # ------------------------------------------------- pipeline pieces
 def gain_normalize(x):
+    """Level-preserving per-channel RMS equalization: multiplies by
+    median(rms)/rms_m so channels are equalized WITHOUT changing the
+    absolute output level (x/rms alone amplifies quiet recordings by
+    1/median_rms ~ +49 dB on the field data)."""
     r = np.sqrt(np.mean(x ** 2, axis=1, keepdims=True))
-    return x / (r + 1e-12)
+    return x * (np.median(r) / (r + 1e-12))
 
 
 def capon_map(mix, kind="lcmv", grid=None):
